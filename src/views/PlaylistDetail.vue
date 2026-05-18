@@ -1,35 +1,34 @@
+<!-- src/views/PlaylistDetail.vue -->
 <script setup>
-import { ref, onMounted } from 'vue';
-import { useRoute } from 'vue-router';
-import { getValidAccessToken } from '../spotifyAuth.js';
+import { ref, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
+import { getValidAccessToken } from '../spotifyAuth.js'
 
-// Route and track definition
-const route = useRoute();
-const playlistId = route.params.id;
-const tracks = ref([]); // Ensure tracks is defined as a ref
+const route = useRoute()
+const playlistId = route.params.id
+const tracks = ref([])
+const player = ref(null) // Holds the Spotify player instance
+const currentTrack = ref(null) // Tracks the currently playing track
 
+// Fetches playlist tracks on component mount
 async function fetchPlaylistTracks() {
-  const token = await getValidAccessToken();
+  const token = await getValidAccessToken()
   if (token) {
-    const response = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-
-    // Check if the response is successful
-    if (response.ok) {
-      const data = await response.json();
-      tracks.value = data.items; // Update the ref value
-    } else {
-      console.error('Failed to fetch tracks:', response.status, response.statusText);
-    }
+    const response = await fetch(
+      `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    )
+    const data = await response.json()
+    tracks.value = data.items
   }
 }
 
-// Fetch tracks when component is mounted
-onMounted(fetchPlaylistTracks);
+onMounted(() => {
+  fetchPlaylistTracks()
+})
 </script>
-
-
 
 <template>
   <div class="playlist-detail">
@@ -45,8 +44,13 @@ onMounted(fetchPlaylistTracks);
           <div class="flip-card-back">
             <p class="track-title">{{ track.track.name }}</p>
             <p class="track-album">Album: {{ track.track.album.name }}</p>
-            <p class="track-year">Year: {{ track.track.album.release_date.slice(0, 4) }}</p>
-            <p class="track-artist">Artist: {{ track.track.artists.map(artist => artist.name).join(', ') }}</p>
+            <p class="track-year">
+              Year: {{ track.track.album.release_date.slice(0, 4) }}
+            </p>
+            <p class="track-artist">
+              Artist:
+              {{ track.track.artists.map(artist => artist.name).join(', ') }}
+            </p>
           </div>
         </div>
       </div>
@@ -55,9 +59,9 @@ onMounted(fetchPlaylistTracks);
 </template>
 
 <style scoped>
-  .playlist-detail {
-    text-align: center;
-  }
+.playlist-detail {
+  text-align: center;
+}
 
 .grid {
   display: grid;
@@ -67,7 +71,7 @@ onMounted(fetchPlaylistTracks);
 }
 
 .grid-item {
-  perspective: 1000px;
+  perspective: 1000px; /* Adds perspective for the 3D flip */
   width: 150px; /* Set a fixed width */
   height: 150px; /* Set a fixed height */
 }
@@ -81,7 +85,7 @@ onMounted(fetchPlaylistTracks);
 }
 
 .grid-item:hover .flip-card {
-  transform: rotateY(180deg);
+  transform: rotateY(180deg); /* Flip effect on hover */
 }
 
 .flip-card-front,
@@ -89,7 +93,7 @@ onMounted(fetchPlaylistTracks);
   position: absolute;
   width: 100%;
   height: 100%;
-  backface-visibility: hidden;
+  backface-visibility: hidden; /* Hide back side during flip */
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -106,10 +110,9 @@ onMounted(fetchPlaylistTracks);
 }
 
 .flip-card-back {
-  background-color: #1a1a1a;
   color: white;
   text-align: center;
-  transform: rotateY(180deg);
+  transform: rotateY(180deg); /* Flip back side to align on hover */
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -125,5 +128,26 @@ onMounted(fetchPlaylistTracks);
 .track-artist {
   font-size: 0.9em;
   margin: 2px 0;
+}
+
+.controls {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.controls button {
+  padding: 10px 20px;
+  font-size: 1em;
+  border: none;
+  border-radius: 5px;
+  background-color: #1db954;
+  color: white;
+  cursor: pointer;
+}
+
+.controls button:hover {
+  background-color: #1ed760;
 }
 </style>
