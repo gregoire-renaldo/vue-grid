@@ -1,59 +1,209 @@
 <!-- src/views/PlaylistDetail.vue -->
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { getValidAccessToken } from '../spotifyAuth.js'
 
 const route = useRoute()
 const playlistId = route.params.id
 const tracks = ref([])
-const player = ref(null) // Holds the Spotify player instance
-const currentTrack = ref(null) // Tracks the currently playing track
+const currentTrack = ref(null)
+const isPlaying = ref(false)
+const playerReady = ref(false)
+const playerError = ref(null)
 
-// Fetches playlist tracks on component mount
+let spotifyPlayer = null
+let deviceId = null
+
+// ── Spotify Web Playback SDK ──────────────────────────────────────────────────
+
+function loadSDK() {
+  return new Promise(resolve => {
+    if (window.Spotify) {
+      resolve()
+      return
+    }
+    window.onSpotifyWebPlaybackSDKReady = resolve
+    const script = document.createElement('script')
+    script.src = 'https://sdk.scdn.co/spotify-player.js'
+    document.head.appendChild(script)
+  })
+}
+
+async function initPlayer() {
+  await loadSDK()
+
+  spotifyPlayer = new window.Spotify.Player({
+    name: 'Vue Grid Player',
+    getOAuthToken: async cb => {
+      cb(await getValidAccessToken())
+    },
+    volume: 0.8,
+  })
+
+  spotifyPlayer.addListener('ready', ({ device_id }) => {
+    deviceId = device_id
+    playerReady.value = true
+  })
+
+  spotifyPlayer.addListener('not_ready', () => {
+    deviceId = null
+    playerReady.value = false
+  })
+
+  spotifyPlayer.addListener('player_state_changed', state => {
+    if (!state) return
+    isPlaying.value = !state.paused
+    const ct = state.track_window?.current_track
+    if (ct) {
+      currentTrack.value = {
+        id: ct.id,
+        uri: ct.uri,
+        name: ct.name,
+        artists: ct.artists,
+        album: ct.album,
+      }
+    }
+  })
+
+  spotifyPlayer.addListener('initialization_error', ({ message }) => {
+    playerError.value = `Init error: ${message}`
+  })
+  spotifyPlayer.addListener('authentication_error', ({ message }) => {
+    playerError.value = `Auth error: ${message}`
+  })
+  spotifyPlayer.addListener('account_error', () => {
+    playerError.value = 'Spotify Premium is required for in-browser playback.'
+  })
+
+  spotifyPlayer.connect()
+}
+
+// ── Tracks ────────────────────────────────────────────────────────────────────
+
 async function fetchPlaylistTracks() {
   const token = await getValidAccessToken()
-  if (token) {
-    const response = await fetch(
-      `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    )
-    const data = await response.json()
-    tracks.value = data.items
+  if (!token) return
+  const res = await fetch(
+    `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  )
+  const data = await res.json()
+  tracks.value = data.items
+}
+
+// ── Playback ──────────────────────────────────────────────────────────────────
+
+async function playTrack(track) {
+  if (!playerReady.value || !deviceId) return
+
+  // Toggle pause if clicking the same track
+  if (currentTrack.value?.id === track.id) {
+    spotifyPlayer.togglePlay()
+    return
+  }
+
+  const token = await getValidAccessToken()
+
+  // Transfer playback to this browser tab
+  await fetch('https://api.spotify.com/v1/me/player', {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ device_ids: [deviceId], play: false }),
+  })
+
+  // Play the selected track
+  await fetch('https://api.spotify.com/v1/me/player/play', {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ uris: [track.uri], device_id: deviceId }),
+  })
+}
+
+async function togglePlayback() {
+  spotifyPlayer?.togglePlay()
+}
+
+async function stopPlayback() {
+  if (spotifyPlayer) {
+    await spotifyPlayer.pause()
+    isPlaying.value = false
+    currentTrack.value = null
   }
 }
 
-onMounted(() => {
-  fetchPlaylistTracks()
+onMounted(async () => {
+  await fetchPlaylistTracks()
+  await initPlayer()
+})
+
+onUnmounted(() => {
+  spotifyPlayer?.disconnect()
 })
 </script>
 
 <template>
   <div class="playlist-detail">
     <h1>Playlist Tracks</h1>
+
+    <!-- Player error (e.g. non-Premium account) -->
+    <p v-if="playerError" class="player-error">⚠️ {{ playerError }}</p>
+    <!-- SDK still loading -->
+    <p v-else-if="!playerReady" class="player-loading">
+      Connecting to Spotify player…
+    </p>
+
     <div class="grid">
-      <div v-for="track in tracks" :key="track.track.id" class="grid-item">
-        <div class="flip-card">
-          <!-- Front of the card: album cover -->
-          <div class="flip-card-front">
-            <img :src="track.track.album.images[0]?.url" alt="Track cover" />
+      <div
+        v-for="track in tracks"
+        :key="track.track.id"
+        class="grid-item"
+        :class="{ playing: currentTrack?.id === track.track.id && isPlaying }"
+        @click="playTrack(track.track)"
+      >
+        <img
+          :src="track.track.album.images[0]?.url"
+          alt="Track cover"
+          class="card-cover"
+        />
+        <div class="card-overlay">
+          <div class="overlay-icon">
+            <span v-if="currentTrack?.id === track.track.id && isPlaying"
+              >⏸</span
+            >
+            <span v-else>▶</span>
           </div>
-          <!-- Back of the card: track details -->
-          <div class="flip-card-back">
-            <p class="track-title">{{ track.track.name }}</p>
-            <p class="track-album">Album: {{ track.track.album.name }}</p>
-            <p class="track-year">
-              Year: {{ track.track.album.release_date.slice(0, 4) }}
-            </p>
-            <p class="track-artist">
-              Artist:
-              {{ track.track.artists.map(artist => artist.name).join(', ') }}
-            </p>
-          </div>
+          <p class="track-title">{{ track.track.name }}</p>
+          <p class="track-artist">
+            {{ track.track.artists.map(a => a.name).join(', ') }}
+          </p>
         </div>
       </div>
+    </div>
+
+    <!-- Now playing bar -->
+    <div v-if="currentTrack" class="now-playing">
+      <img
+        :src="currentTrack.album.images[0]?.url"
+        alt="Album cover"
+        class="now-playing-cover"
+      />
+      <div class="now-playing-info">
+        <span class="now-playing-title">{{ currentTrack.name }}</span>
+        <span class="now-playing-artist">{{
+          currentTrack.artists.map(a => a.name).join(', ')
+        }}</span>
+      </div>
+      <button class="now-playing-btn" @click="togglePlayback">
+        {{ isPlaying ? '⏸' : '▶' }}
+      </button>
+      <button class="now-playing-btn stop-btn" @click="stopPlayback">■</button>
     </div>
   </div>
 </template>
@@ -61,6 +211,18 @@ onMounted(() => {
 <style scoped>
 .playlist-detail {
   text-align: center;
+  padding-bottom: 100px;
+}
+
+.player-error {
+  color: #ff6b6b;
+  margin: 0.5rem 0 1rem;
+}
+
+.player-loading {
+  color: #b3b3b3;
+  margin: 0.5rem 0 1rem;
+  font-style: italic;
 }
 
 .grid {
@@ -71,83 +233,145 @@ onMounted(() => {
 }
 
 .grid-item {
-  perspective: 1000px; /* Adds perspective for the 3D flip */
-  width: 150px; /* Set a fixed width */
-  height: 150px; /* Set a fixed height */
-}
-
-.flip-card {
-  width: 100%;
-  height: 100%;
   position: relative;
-  transform-style: preserve-3d;
-  transition: transform 0.6s;
-}
-
-.grid-item:hover .flip-card {
-  transform: rotateY(180deg); /* Flip effect on hover */
-}
-
-.flip-card-front,
-.flip-card-back {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  backface-visibility: hidden; /* Hide back side during flip */
+  width: 150px;
+  height: 150px;
+  cursor: pointer;
   border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 10px;
-  box-sizing: border-box;
+  overflow: hidden;
+  transition: box-shadow 0.2s;
 }
 
-.flip-card-front img {
+.grid-item.playing {
+  box-shadow: 0 0 0 3px #1db954;
+}
+
+.card-cover {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 8px;
+  display: block;
 }
 
-.flip-card-back {
+.card-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
   color: white;
-  text-align: center;
-  transform: rotateY(180deg); /* Flip back side to align on hover */
   display: flex;
   flex-direction: column;
+  align-items: center;
   justify-content: center;
+  padding: 8px;
+  box-sizing: border-box;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.grid-item:hover .card-overlay,
+.grid-item.playing .card-overlay {
+  opacity: 1;
+}
+
+.overlay-icon {
+  font-size: 1.8rem;
+  margin-bottom: 6px;
 }
 
 .track-title {
   font-weight: bold;
-  margin-bottom: 5px;
-}
-
-.track-album,
-.track-year,
-.track-artist {
-  font-size: 0.9em;
+  font-size: 0.75em;
   margin: 2px 0;
+  text-align: center;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
-.controls {
-  display: flex;
-  gap: 10px;
-  justify-content: center;
-  margin-top: 20px;
+.track-artist {
+  font-size: 0.7em;
+  margin: 2px 0;
+  text-align: center;
+  color: #ccc;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  width: 100%;
 }
 
-.controls button {
-  padding: 10px 20px;
-  font-size: 1em;
-  border: none;
-  border-radius: 5px;
-  background-color: #1db954;
+.no-preview-text {
+  font-size: 0.65em;
+  margin-top: 4px;
+  opacity: 0.75;
+  font-style: italic;
+}
+
+/* Now playing bar */
+.now-playing {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 72px;
+  background: #121212;
   color: white;
-  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0 1.5rem;
+  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.5);
+  z-index: 100;
 }
 
-.controls button:hover {
-  background-color: #1ed760;
+.now-playing-cover {
+  width: 48px;
+  height: 48px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.now-playing-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  text-align: left;
+}
+
+.now-playing-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.now-playing-artist {
+  font-size: 0.8rem;
+  color: #b3b3b3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.now-playing-btn {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 50%;
+  transition: background 0.2s;
+}
+
+.now-playing-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.stop-btn {
+  font-size: 1rem;
+  color: #b3b3b3;
 }
 </style>

@@ -56,9 +56,7 @@ onMounted(loadUserProfile)
     <div class="wrapper">
       <nav>
         <RouterLink to="/">Home</RouterLink>
-        <RouterLink to="/about">About</RouterLink>
         <RouterLink to="/playlists">Playlists</RouterLink>
-        <!-- New link -->
       </nav>
       <!-- Connect to Spotify button -->
       <button @click="connectToSpotify" class="connect-button">
