@@ -1,12 +1,13 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
-import Playlists from '../views/Playlists.vue';
-import PlaylistDetail from '../views/PlaylistDetail.vue'; 
+import Playlists from '../views/Playlists.vue'
+import PlaylistDetail from '../views/PlaylistDetail.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
-    { path: '/', name: 'home', component: HomeView},
+    { path: '/', name: 'home', component: HomeView },
+    { path: '/callback', name: 'Callback', component: HomeView },
     {
       path: '/about',
       name: 'about',
@@ -16,7 +17,12 @@ const router = createRouter({
       component: () => import('../views/AboutView.vue'),
     },
     { path: '/playlists', name: 'Playlists', component: Playlists },
-    { path: '/playlists/:id', name: 'PlaylistDetail', component: PlaylistDetail, props: true }
+    {
+      path: '/playlists/:id',
+      name: 'PlaylistDetail',
+      component: PlaylistDetail,
+      props: true,
+    },
   ],
 })
 

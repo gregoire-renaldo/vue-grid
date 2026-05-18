@@ -1,32 +1,46 @@
 <script setup>
-import { RouterLink, RouterView } from 'vue-router';
-import HelloWorld from './components/HelloWorld.vue';
-import { ref, onMounted } from 'vue';
-import { redirectToAuthCodeFlow, fetchProfile, getAccessToken } from './spotifyAuth.js';
+import { RouterLink, RouterView } from 'vue-router'
+import HelloWorld from './components/HelloWorld.vue'
+import { ref, onMounted } from 'vue'
+import {
+  redirectToAuthCodeFlow,
+  fetchProfile,
+  getAccessToken,
+  getSpotifyRedirectUri,
+} from './spotifyAuth.js'
 
-// Spotify client ID
-// const clientId = process.env.VUE_APP_SPOTIFY_CLIENT_ID;
-const profile = ref(null);
+const profile = ref(null)
+const authError = ref('')
 
 async function connectToSpotify() {
-  redirectToAuthCodeFlow(clientId);
+  authError.value = ''
+  await redirectToAuthCodeFlow()
 }
 
 async function loadUserProfile() {
-  const params = new URLSearchParams(window.location.search);
-  const code = params.get('code');
-  
-  if (code) {
-    const accessToken = await getAccessToken(code);
-    if (accessToken) {
-      profile.value = await fetchProfile();
+  const params = new URLSearchParams(window.location.search)
+  const code = params.get('code')
+  const authProviderError = params.get('error')
+
+  if (authProviderError) {
+    authError.value = `Spotify authorization failed: ${authProviderError}. Redirect URI used: ${getSpotifyRedirectUri()}`
+    return
+  }
+
+  try {
+    if (code) {
+      await getAccessToken(code)
+      window.history.replaceState({}, document.title, '/')
     }
-  } else {
-    profile.value = await fetchProfile();
+
+    profile.value = await fetchProfile()
+  } catch (error) {
+    authError.value =
+      error instanceof Error ? error.message : 'Spotify authentication failed.'
   }
 }
 
-onMounted(loadUserProfile);
+onMounted(loadUserProfile)
 </script>
 
 <template>
@@ -43,16 +57,21 @@ onMounted(loadUserProfile);
       <nav>
         <RouterLink to="/">Home</RouterLink>
         <RouterLink to="/about">About</RouterLink>
-        <RouterLink to="/playlists">Playlists</RouterLink> <!-- New link -->
+        <RouterLink to="/playlists">Playlists</RouterLink>
+        <!-- New link -->
       </nav>
       <!-- Connect to Spotify button -->
       <button @click="connectToSpotify" class="connect-button">
-        {{ profile ? `Connected as ${profile.display_name}` : "Connect to Spotify" }}
+        {{
+          profile
+            ? `Connected as ${profile.display_name}`
+            : 'Connect to Spotify'
+        }}
       </button>
+      <p v-if="authError" class="auth-error">{{ authError }}</p>
     </div>
   </header>
   <RouterView />
-  
 </template>
 
 <style scoped>
@@ -79,7 +98,7 @@ nav {
   padding: 0.5rem 1rem;
   font-size: 14px;
   color: white;
-  background-color: #1DB954;
+  background-color: #1db954;
   border: none;
   border-radius: 25px;
   cursor: pointer;
@@ -87,6 +106,13 @@ nav {
 
 .connect-button:hover {
   background-color: #1ed760;
+}
+
+.auth-error {
+  margin: 0.75rem auto 0;
+  color: #b00020;
+  font-size: 0.9rem;
+  text-align: center;
 }
 
 nav a.router-link-exact-active {

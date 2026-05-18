@@ -36,3 +36,18 @@ onMounted(fetchPlaylists);
     <p v-else>No playlists found.</p>
   </div>
 </template>
+
+<style scoped>
+
+ul {
+  list-style-type: none;
+  padding: 0;
+}
+
+li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+</style>
