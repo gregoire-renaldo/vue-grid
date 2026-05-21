@@ -14,6 +14,7 @@ const currentTrack = ref(null)
 const currentPosition = ref(0)
 const trackDuration = ref(0)
 const isPlaying = ref(false)
+const shuffleEnabled = ref(false)
 const showNowPlaying = ref(true)
 const playerReady = ref(false)
 const playerError = ref(null)
@@ -22,13 +23,56 @@ let spotifyPlayer = null
 let deviceId = null
 let progressTimer = null
 let inactivityTimer = null
+let lastProgressUpdateAt = 0
+
+function getTrackUris(track) {
+  const uris = new Set()
+  if (!track) return uris
+
+  if (track.uri) uris.add(track.uri)
+  if (track.linked_from?.uri) uris.add(track.linked_from.uri)
+  if (track.linkedFromUri) uris.add(track.linkedFromUri)
+
+  return uris
+}
+
+function setCurrentTrackFromTrack(track, playing = true) {
+  if (!track) return
+
+  currentTrack.value = {
+    id: track.id,
+    uri: track.uri,
+    linkedFromUri: track.linked_from?.uri || track.linkedFromUri || null,
+    name: track.name,
+    artists: track.artists || [],
+    album: track.album,
+  }
+
+  isPlaying.value = playing
+  currentPosition.value = 0
+  trackDuration.value = track.duration_ms ?? 0
+  showNowPlaying.value = true
+
+  if (playing) {
+    lastProgressUpdateAt = Date.now()
+    startProgressTimer()
+    scheduleNowPlayingFade()
+  } else {
+    stopProgressTimer()
+    stopInactivityTimer()
+  }
+}
 
 function applyPlayerState(state) {
   if (!state) return
 
   isPlaying.value = !state.paused
+  if (typeof state.shuffle === 'boolean') {
+    shuffleEnabled.value = state.shuffle
+  }
   currentPosition.value = state.position ?? 0
   trackDuration.value = state.duration ?? 0
+  lastProgressUpdateAt = Date.now()
   showNowPlaying.value = true
 
   const ct = state.track_window?.current_track
@@ -36,6 +80,7 @@ function applyPlayerState(state) {
     currentTrack.value = {
       id: ct.id,
       uri: ct.uri,
+      linkedFromUri: ct.linked_from?.uri || null,
       name: ct.name,
       artists: ct.artists,
       album: ct.album,
@@ -98,19 +143,26 @@ function stopProgressTimer() {
     clearInterval(progressTimer)
     progressTimer = null
   }
+  lastProgressUpdateAt = 0
 }
 
 function startProgressTimer() {
   stopProgressTimer()
 
+  lastProgressUpdateAt = Date.now()
+
   progressTimer = setInterval(() => {
     if (!isPlaying.value || !trackDuration.value) return
 
+    const now = Date.now()
+    const elapsed = Math.max(0, now - lastProgressUpdateAt)
+    lastProgressUpdateAt = now
+
     currentPosition.value = Math.min(
-      currentPosition.value + 1000,
+      currentPosition.value + elapsed,
       trackDuration.value,
     )
-  }, 1000)
+  }, 200)
 }
 
 // ── Spotify Web Playback SDK ──────────────────────────────────────────────────
@@ -285,6 +337,107 @@ async function playTrack(track) {
     return
   }
 
+  setCurrentTrackFromTrack(track, true)
+  await syncPlayerState()
+}
+
+async function shufflePlay() {
+  if (!playerReady.value || !deviceId || tracks.value.length === 0) return
+
+  const token = await getValidAccessToken()
+  if (!token) {
+    playerError.value =
+      'Spotify session expired. Please reconnect your account.'
+    return
+  }
+
+  playerError.value = null
+
+  await spotifyPlayer.activateElement?.()
+
+  const transferResponse = await fetch('https://api.spotify.com/v1/me/player', {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ device_ids: [deviceId], play: false }),
+  })
+
+  if (!transferResponse.ok) {
+    let message = 'Unable to activate the Spotify player device.'
+    try {
+      const data = await transferResponse.json()
+      message = data?.error?.message || message
+    } catch {
+      // Ignore JSON parsing errors and keep fallback message.
+    }
+    playerError.value = message
+    return
+  }
+
+  const shuffleResponse = await fetch(
+    `https://api.spotify.com/v1/me/player/shuffle?state=true&device_id=${encodeURIComponent(deviceId)}`,
+    {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  )
+
+  if (!shuffleResponse.ok) {
+    let message = 'Unable to enable shuffle mode.'
+    try {
+      const data = await shuffleResponse.json()
+      message = data?.error?.message || message
+    } catch {
+      // Ignore JSON parsing errors and keep fallback message.
+    }
+    playerError.value = message
+    return
+  }
+
+  shuffleEnabled.value = true
+
+  const randomIndex = Math.floor(Math.random() * tracks.value.length)
+  const randomTrack = tracks.value[randomIndex]?.track
+  if (!randomTrack) return
+
+  const playResponse = await fetch(
+    `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(deviceId)}`,
+    {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(
+        isLikedSongs
+          ? {
+              uris: [randomTrack.uri],
+            }
+          : {
+              context_uri: playlistUri.value,
+              offset: { position: randomIndex },
+            },
+      ),
+    },
+  )
+
+  if (!playResponse.ok) {
+    let message = 'Unable to start shuffled playback.'
+    try {
+      const data = await playResponse.json()
+      message = data?.error?.message || message
+    } catch {
+      // Ignore JSON parsing errors and keep fallback message.
+    }
+    playerError.value = message
+    return
+  }
+
+  setCurrentTrackFromTrack(randomTrack, true)
   await syncPlayerState()
 }
 
@@ -299,6 +452,7 @@ async function seekTrack(event) {
   revealNowPlaying()
   const nextPosition = Number(event.target.value)
   currentPosition.value = nextPosition
+  lastProgressUpdateAt = Date.now()
   await spotifyPlayer.seek(nextPosition)
 }
 
@@ -343,12 +497,19 @@ function isCurrentTrackCard(track) {
   if (!track || !currentTrack.value) return false
 
   if (currentTrack.value.id && track.id) {
-    return currentTrack.value.id === track.id
+    if (currentTrack.value.id === track.id) {
+      return true
+    }
   }
 
-  return Boolean(
-    currentTrack.value.uri && track.uri && currentTrack.value.uri === track.uri,
-  )
+  const currentTrackUris = getTrackUris(currentTrack.value)
+  const cardTrackUris = getTrackUris(track)
+
+  for (const uri of currentTrackUris) {
+    if (cardTrackUris.has(uri)) return true
+  }
+
+  return false
 }
 
 onMounted(async () => {
@@ -372,7 +533,17 @@ onUnmounted(() => {
 
 <template>
   <div class="playlist-detail">
-    <h1>{{ playlistName }}</h1>
+    <div class="playlist-header">
+      <h1>{{ playlistName }}</h1>
+      <button
+        class="shuffle-btn"
+        :class="{ active: shuffleEnabled }"
+        :disabled="!playerReady || tracks.length === 0"
+        @click="shufflePlay"
+      >
+        {{ shuffleEnabled ? 'Shuffle On' : 'Shuffle Play' }}
+      </button>
+    </div>
 
     <!-- Player error (e.g. non-Premium account) -->
     <p v-if="playerError" class="player-error">⚠️ {{ playerError }}</p>
@@ -492,6 +663,47 @@ onUnmounted(() => {
   padding-bottom: 100px;
 }
 
+.playlist-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.shuffle-btn {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(29, 185, 84, 0.12);
+  color: #e9fff1;
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.shuffle-btn.active {
+  background: rgba(29, 185, 84, 0.32);
+  border-color: rgba(29, 185, 84, 0.95);
+  color: #f3fff8;
+  box-shadow: 0 0 0 2px rgba(29, 185, 84, 0.25);
+}
+
+.shuffle-btn:hover:enabled {
+  background: rgba(29, 185, 84, 0.24);
+  border-color: rgba(29, 185, 84, 0.7);
+  transform: translateY(-1px);
+}
+
+.shuffle-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .player-error {
   color: #ff6b6b;
   margin: 0.5rem 0 1rem;
@@ -518,11 +730,16 @@ onUnmounted(() => {
   cursor: pointer;
   border-radius: 2px;
   overflow: hidden;
-  transition: box-shadow 0.2s;
+  transition:
+    box-shadow 0.25s ease,
+    transform 0.25s ease,
+    filter 0.25s ease;
 }
 
 .grid-item.current {
   box-shadow: 0 0 0 2px rgba(29, 185, 84, 0.95);
+  transform: translateY(-1px) scale(1.01);
+  filter: saturate(1.06);
 }
 
 .grid-item.playing {
@@ -535,6 +752,19 @@ onUnmounted(() => {
   inset: 6px;
   border: 1px solid rgba(29, 185, 84, 0.75);
   pointer-events: none;
+  animation: focus-line-fade 0.25s ease;
+}
+
+@keyframes focus-line-fade {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .card-cover {
