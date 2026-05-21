@@ -8,6 +8,7 @@ const route = useRoute()
 const playlistId = route.params.id
 const isLikedSongs = playlistId === 'liked-songs'
 const playlistName = ref(isLikedSongs ? 'Liked Songs' : '')
+const playlistUri = ref('')
 const tracks = ref([])
 const currentTrack = ref(null)
 const isPlaying = ref(false)
@@ -96,6 +97,7 @@ async function fetchPlaylistTracks() {
     )
     const playlistData = await playlistResponse.json()
     playlistName.value = playlistData.name || 'Playlist'
+    playlistUri.value = playlistData.uri || ''
   }
 
   let allTracks = []
@@ -139,19 +141,44 @@ async function playTrack(track) {
     body: JSON.stringify({ device_ids: [deviceId], play: false }),
   })
 
-  // Play the selected track
+  const selectedTrackIndex = tracks.value.findIndex(
+    playlistTrack => playlistTrack.track.id === track.id,
+  )
+
+  // Play the selected track in playlist context so Spotify can continue to the next one
   await fetch('https://api.spotify.com/v1/me/player/play', {
     method: 'PUT',
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ uris: [track.uri], device_id: deviceId }),
+    body: JSON.stringify(
+      isLikedSongs
+        ? {
+            uris: [track.uri],
+            device_id: deviceId,
+          }
+        : {
+            context_uri: playlistUri.value,
+            offset: { position: Math.max(selectedTrackIndex, 0) },
+            device_id: deviceId,
+          },
+    ),
   })
 }
 
 async function togglePlayback() {
   spotifyPlayer?.togglePlay()
+}
+
+async function previousTrack() {
+  if (!playerReady.value) return
+  await spotifyPlayer?.previousTrack()
+}
+
+async function nextTrack() {
+  if (!playerReady.value) return
+  await spotifyPlayer?.nextTrack()
 }
 
 async function stopPlayback() {
@@ -226,6 +253,20 @@ onUnmounted(() => {
       </div>
       <button class="now-playing-btn" @click="togglePlayback">
         {{ isPlaying ? '⏸' : '▶' }}
+      </button>
+      <button
+        class="now-playing-btn"
+        @click="previousTrack"
+        aria-label="Previous track"
+      >
+        ⏮
+      </button>
+      <button
+        class="now-playing-btn"
+        @click="nextTrack"
+        aria-label="Next track"
+      >
+        ⏭
       </button>
       <button class="now-playing-btn stop-btn" @click="stopPlayback">■</button>
     </div>
