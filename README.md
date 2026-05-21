@@ -1,88 +1,85 @@
-# vue-grid
+# Vue Grid
 
-A Vue 3 + Vite application that displays your Spotify playlists in an interactive grid with flip-card animations. Authenticate with Spotify, browse your playlists, and view detailed track information.
+Vue Grid is a Spotify companion app that lets you connect your account and explore your playlists in a visual, cover-first interface.
 
-## Features
+## For Users
 
-- Spotify OAuth 2.0 authentication with PKCE flow
-- View all your Spotify playlists
-- Interactive flip-card animations displaying album art and track details
-- Automatic token refresh
-- Secure local storage management
+### What You Can Do
 
-## Prerequisites
+- Connect your Spotify account in one click
+- Browse your playlists as large visual cards
+- Open any playlist and see track covers in a full grid
+- See the real playlist title on the detail page
+- Access your Liked Songs directly
+- Play and pause tracks from inside the app
+- Sign out anytime with a clear confirmation modal
 
-- Node.js (v16+)
-- A Spotify Developer account and registered app
+### How It Works
 
-## Spotify Setup
+1. Open the app
+2. Click Connect to Spotify
+3. Authorize with your Spotify account
+4. Browse playlists and open details
+5. Play tracks and enjoy
 
-1. **Create a Spotify App:**
+### Screenshots
 
-   - Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
-   - Log in or create a Spotify account
-   - Create a new app and accept the terms
-   - Copy your **Client ID**
+Add screenshots below to show the app experience.
 
-2. **Configure Redirect URI:**
+- Home page
+  - ![Home page screenshot](./docs/screenshots/home.png)
+- Playlists page
+  - ![Playlists page screenshot](./docs/screenshots/playlists.png)
+- Playlist detail page
+  - ![Playlist detail screenshot](./docs/screenshots/playlist-detail.png)
 
-   - In your app settings, add this **Redirect URI**:
+## For Developers
 
-     ```
-     http://127.0.0.1:5173/callback
-     ```
+### Local Setup 
 
-   - Save your changes
+Use this section only if you want to run or contribute to the project.
 
-3. **Set Local Environment Variables:**
+Requirements:
 
-   - Create or update `.env` in the project root:
+- Node.js 18+
+- npm
+- Spotify Developer account
 
-     ```env
-     VITE_APP_SPOTIFY_CLIENT_ID=your_client_id_here
-     VITE_APP_SPOTIFY_REDIRECT_URI=http://127.0.0.1:5173/callback
-     ```
+1. Create a Spotify app in the Spotify Developer Dashboard:
+   [https://developer.spotify.com/dashboard](https://developer.spotify.com/dashboard)
 
-## Project Setup
+2. In your app settings, add this Redirect URI:
+
+```text
+http://127.0.0.1:5173/callback
+```
+
+1. Create or update .env in the project root:
+
+```dotenv
+VITE_APP_SPOTIFY_CLIENT_ID=your_spotify_client_id
+VITE_APP_SPOTIFY_REDIRECT_URI=http://127.0.0.1:5173/callback
+```
+
+1. Install dependencies and start dev server:
 
 ```sh
 npm install
-```
-
-### Compile and Hot-Reload for Development
-
-```sh
 npm run dev
 ```
 
-The app will be available at `http://127.0.0.1:5173/`
+Local app URL:
 
-**Important:** Always use `127.0.0.1` (not `localhost`) to match Spotify's requirements for HTTP redirects.
-
-### Compile and Minify for Production
-
-```sh
-npm run build
+```text
+http://127.0.0.1:5173/
 ```
 
-### Lint with [ESLint](https://eslint.org/)
+Important: use 127.0.0.1 (not localhost) to keep callback behavior consistent.
+
+### Scripts
 
 ```sh
+npm run dev
+npm run build
 npm run lint
 ```
-
-## Project Structure
-
-- `src/spotifyAuth.js` — Spotify OAuth flow with PKCE and token management
-- `src/App.vue` — Main app component with auth UI
-- `src/router/` — Vue Router configuration
-- `src/views/` — Page components (Home, Playlists, PlaylistDetail)
-- `src/components/` — Reusable UI components
-
-## Recommended IDE Setup
-
-[VSCode](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
-
-## Customize Configuration
-
-See [Vite Configuration Reference](https://vite.dev/config/).
