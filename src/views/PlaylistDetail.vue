@@ -23,6 +23,52 @@ let deviceId = null
 let progressTimer = null
 let inactivityTimer = null
 
+function applyPlayerState(state) {
+  if (!state) return
+
+  isPlaying.value = !state.paused
+  currentPosition.value = state.position ?? 0
+  trackDuration.value = state.duration ?? 0
+  showNowPlaying.value = true
+
+  const ct = state.track_window?.current_track
+  if (ct) {
+    currentTrack.value = {
+      id: ct.id,
+      uri: ct.uri,
+      name: ct.name,
+      artists: ct.artists,
+      album: ct.album,
+    }
+  }
+
+  if (state.paused) {
+    stopProgressTimer()
+    stopInactivityTimer()
+    showNowPlaying.value = true
+  } else {
+    startProgressTimer()
+    scheduleNowPlayingFade()
+  }
+}
+
+function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+async function syncPlayerState(retries = 5, delayMs = 120) {
+  if (!spotifyPlayer) return
+
+  for (let attempt = 0; attempt < retries; attempt++) {
+    const state = await spotifyPlayer.getCurrentState()
+    if (state) {
+      applyPlayerState(state)
+      return
+    }
+    await wait(delayMs)
+  }
+}
+
 function stopInactivityTimer() {
   if (inactivityTimer) {
     clearTimeout(inactivityTimer)
@@ -104,30 +150,7 @@ async function initPlayer() {
   })
 
   spotifyPlayer.addListener('player_state_changed', state => {
-    if (!state) return
-    isPlaying.value = !state.paused
-    currentPosition.value = state.position ?? 0
-    trackDuration.value = state.duration ?? 0
-    showNowPlaying.value = true
-    const ct = state.track_window?.current_track
-    if (ct) {
-      currentTrack.value = {
-        id: ct.id,
-        uri: ct.uri,
-        name: ct.name,
-        artists: ct.artists,
-        album: ct.album,
-      }
-    }
-
-    if (state.paused) {
-      stopProgressTimer()
-      stopInactivityTimer()
-      showNowPlaying.value = true
-    } else {
-      startProgressTimer()
-      scheduleNowPlayingFade()
-    }
+    applyPlayerState(state)
   })
 
   spotifyPlayer.addListener('initialization_error', ({ message }) => {
@@ -261,10 +284,13 @@ async function playTrack(track) {
     playerError.value = message
     return
   }
+
+  await syncPlayerState()
 }
 
 async function togglePlayback() {
-  spotifyPlayer?.togglePlay()
+  await spotifyPlayer?.togglePlay()
+  await syncPlayerState()
 }
 
 async function seekTrack(event) {
@@ -280,12 +306,14 @@ async function previousTrack() {
   if (!playerReady.value) return
   revealNowPlaying()
   await spotifyPlayer?.previousTrack()
+  await syncPlayerState()
 }
 
 async function nextTrack() {
   if (!playerReady.value) return
   revealNowPlaying()
   await spotifyPlayer?.nextTrack()
+  await syncPlayerState()
 }
 
 async function stopPlayback() {
@@ -309,6 +337,18 @@ function formatTime(milliseconds) {
   const seconds = totalSeconds % 60
 
   return `${minutes}:${String(seconds).padStart(2, '0')}`
+}
+
+function isCurrentTrackCard(track) {
+  if (!track || !currentTrack.value) return false
+
+  if (currentTrack.value.id && track.id) {
+    return currentTrack.value.id === track.id
+  }
+
+  return Boolean(
+    currentTrack.value.uri && track.uri && currentTrack.value.uri === track.uri,
+  )
 }
 
 onMounted(async () => {
@@ -346,7 +386,10 @@ onUnmounted(() => {
         v-for="track in tracks"
         :key="track.track.id"
         class="grid-item"
-        :class="{ playing: currentTrack?.id === track.track.id && isPlaying }"
+        :class="{
+          current: isCurrentTrackCard(track.track),
+          playing: isCurrentTrackCard(track.track) && isPlaying,
+        }"
         @click="playTrack(track.track)"
       >
         <img
@@ -354,11 +397,26 @@ onUnmounted(() => {
           alt="Track cover"
           class="card-cover"
         />
+        <div
+          v-if="isCurrentTrackCard(track.track) && isPlaying"
+          class="dust-layer"
+          aria-hidden="true"
+        >
+          <span
+            v-for="n in 12"
+            :key="`dust-${track.track.id}-${n}`"
+            class="dust-particle"
+            :style="{
+              '--x': `${(n * 17) % 100}%`,
+              '--size': `${2 + (n % 3)}px`,
+              '--delay': `${(n % 6) * 0.55}s`,
+              '--duration': `${5.2 + (n % 5) * 0.7}s`,
+            }"
+          />
+        </div>
         <div class="card-overlay">
           <div class="overlay-icon">
-            <span v-if="currentTrack?.id === track.track.id && isPlaying"
-              >⏸</span
-            >
+            <span v-if="isCurrentTrackCard(track.track) && isPlaying">⏸</span>
             <span v-else>▶</span>
           </div>
           <p class="track-title">{{ track.track.name }}</p>
@@ -463,8 +521,20 @@ onUnmounted(() => {
   transition: box-shadow 0.2s;
 }
 
+.grid-item.current {
+  box-shadow: 0 0 0 2px rgba(29, 185, 84, 0.95);
+}
+
 .grid-item.playing {
   box-shadow: 0 0 0 3px #1db954;
+}
+
+.grid-item.current::after {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border: 1px solid rgba(29, 185, 84, 0.75);
+  pointer-events: none;
 }
 
 .card-cover {
@@ -487,6 +557,7 @@ onUnmounted(() => {
   box-sizing: border-box;
   opacity: 0;
   transition: opacity 0.2s;
+  z-index: 2;
 }
 
 .grid-item:hover .card-overlay,
@@ -497,6 +568,52 @@ onUnmounted(() => {
 .overlay-icon {
   font-size: 1.8rem;
   margin-bottom: 6px;
+}
+
+.dust-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.dust-particle {
+  position: absolute;
+  left: var(--x);
+  bottom: -8%;
+  width: var(--size);
+  height: var(--size);
+  border-radius: 999px;
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.72) 0%,
+    rgba(229, 229, 229, 0.45) 60%,
+    rgba(205, 205, 205, 0.05) 100%
+  );
+  animation: dust-float var(--duration) linear infinite;
+  animation-delay: var(--delay);
+  opacity: 0;
+}
+
+@keyframes dust-float {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0.7);
+    opacity: 0;
+  }
+
+  10% {
+    opacity: 0.45;
+  }
+
+  65% {
+    opacity: 0.3;
+  }
+
+  100% {
+    transform: translate3d(12px, -120%, 0) scale(1.15);
+    opacity: 0;
+  }
 }
 
 .track-title {
