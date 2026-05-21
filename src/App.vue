@@ -1,20 +1,42 @@
 <script setup>
-import { RouterLink, RouterView } from 'vue-router'
-import HelloWorld from './components/HelloWorld.vue'
-import { ref, onMounted } from 'vue'
+import { RouterLink, RouterView, useRoute } from 'vue-router'
+import { computed, ref, onMounted } from 'vue'
+import ConfirmModal from './components/ConfirmModal.vue'
 import {
   redirectToAuthCodeFlow,
   fetchProfile,
   getAccessToken,
   getSpotifyRedirectUri,
+  signOutSpotify,
 } from './spotifyAuth.js'
 
 const profile = ref(null)
 const authError = ref('')
+const showSignOutModal = ref(false)
+const route = useRoute()
+const showHomeButtonPlacement = computed(
+  () => route.name === 'home' || route.name === 'Callback',
+)
 
 async function connectToSpotify() {
+  if (profile.value) {
+    showSignOutModal.value = true
+    return
+  }
+
   authError.value = ''
   await redirectToAuthCodeFlow()
+}
+
+function confirmSignOut() {
+  signOutSpotify()
+  profile.value = null
+  authError.value = ''
+  showSignOutModal.value = false
+}
+
+function cancelSignOut() {
+  showSignOutModal.value = false
 }
 
 async function loadUserProfile() {
@@ -49,9 +71,24 @@ onMounted(loadUserProfile)
       <nav>
         <RouterLink to="/">Home</RouterLink>
         <RouterLink to="/playlists">Playlists</RouterLink>
+
+        <button
+          v-if="!showHomeButtonPlacement"
+          @click="connectToSpotify"
+          class="connect-button nav-connect-button"
+        >
+          {{
+            profile
+              ? `Connected as ${profile.display_name}`
+              : 'Connect to Spotify'
+          }}
+        </button>
       </nav>
-      <!-- Connect to Spotify button -->
-      <button @click="connectToSpotify" class="connect-button">
+      <button
+        v-if="showHomeButtonPlacement"
+        @click="connectToSpotify"
+        class="connect-button"
+      >
         {{
           profile
             ? `Connected as ${profile.display_name}`
@@ -64,6 +101,24 @@ onMounted(loadUserProfile)
   <main class="app-content">
     <RouterView />
   </main>
+
+  <ConfirmModal
+    :open="showSignOutModal"
+    title="Sign out from Spotify?"
+    confirm-text="Sign out"
+    cancel-text="Cancel"
+    size="sm"
+    confirm-variant="danger"
+    cancel-variant="secondary"
+    @cancel="cancelSignOut"
+    @confirm="confirmSignOut"
+  >
+    <p>
+      You are connected as
+      <strong>{{ profile?.display_name }}</strong
+      >.
+    </p>
+  </ConfirmModal>
 </template>
 
 <style scoped>
@@ -97,6 +152,12 @@ nav {
   border: none;
   border-radius: 25px;
   cursor: pointer;
+}
+
+.nav-connect-button {
+  display: inline-block;
+  margin: 0 0 0 1rem;
+  vertical-align: middle;
 }
 
 .connect-button:hover {
@@ -147,6 +208,10 @@ nav a:first-of-type {
     font-size: 1rem;
     padding: 1rem 0;
     margin-top: 1rem;
+  }
+
+  .nav-connect-button {
+    margin-left: 1.25rem;
   }
 }
 </style>

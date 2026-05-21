@@ -33,6 +33,10 @@ function clearStoredAuth() {
   localStorage.removeItem('spotify_token_expiry')
 }
 
+export function signOutSpotify() {
+  clearStoredAuth()
+}
+
 function requireClientId() {
   if (!clientId) {
     throw new Error('Missing VITE_APP_SPOTIFY_CLIENT_ID environment variable.')
