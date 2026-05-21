@@ -11,12 +11,61 @@ const playlistName = ref(isLikedSongs ? 'Liked Songs' : '')
 const playlistUri = ref('')
 const tracks = ref([])
 const currentTrack = ref(null)
+const currentPosition = ref(0)
+const trackDuration = ref(0)
 const isPlaying = ref(false)
+const showNowPlaying = ref(true)
 const playerReady = ref(false)
 const playerError = ref(null)
 
 let spotifyPlayer = null
 let deviceId = null
+let progressTimer = null
+let inactivityTimer = null
+
+function stopInactivityTimer() {
+  if (inactivityTimer) {
+    clearTimeout(inactivityTimer)
+    inactivityTimer = null
+  }
+}
+
+function scheduleNowPlayingFade() {
+  stopInactivityTimer()
+
+  inactivityTimer = setTimeout(() => {
+    if (isPlaying.value) {
+      showNowPlaying.value = false
+    }
+  }, 5000)
+}
+
+function revealNowPlaying() {
+  showNowPlaying.value = true
+  if (isPlaying.value) {
+    scheduleNowPlayingFade()
+  }
+}
+
+function stopProgressTimer() {
+  if (progressTimer) {
+    clearInterval(progressTimer)
+    progressTimer = null
+  }
+}
+
+function startProgressTimer() {
+  stopProgressTimer()
+
+  progressTimer = setInterval(() => {
+    if (!isPlaying.value || !trackDuration.value) return
+
+    currentPosition.value = Math.min(
+      currentPosition.value + 1000,
+      trackDuration.value,
+    )
+  }, 1000)
+}
 
 // ── Spotify Web Playback SDK ──────────────────────────────────────────────────
 
@@ -57,6 +106,9 @@ async function initPlayer() {
   spotifyPlayer.addListener('player_state_changed', state => {
     if (!state) return
     isPlaying.value = !state.paused
+    currentPosition.value = state.position ?? 0
+    trackDuration.value = state.duration ?? 0
+    showNowPlaying.value = true
     const ct = state.track_window?.current_track
     if (ct) {
       currentTrack.value = {
@@ -66,6 +118,15 @@ async function initPlayer() {
         artists: ct.artists,
         album: ct.album,
       }
+    }
+
+    if (state.paused) {
+      stopProgressTimer()
+      stopInactivityTimer()
+      showNowPlaying.value = true
+    } else {
+      startProgressTimer()
+      scheduleNowPlayingFade()
     }
   })
 
@@ -130,9 +191,19 @@ async function playTrack(track) {
   }
 
   const token = await getValidAccessToken()
+  if (!token) {
+    playerError.value =
+      'Spotify session expired. Please reconnect your account.'
+    return
+  }
+
+  playerError.value = null
+
+  // Some browsers require this user-gesture activation before remote playback commands.
+  await spotifyPlayer.activateElement?.()
 
   // Transfer playback to this browser tab
-  await fetch('https://api.spotify.com/v1/me/player', {
+  const transferResponse = await fetch('https://api.spotify.com/v1/me/player', {
     method: 'PUT',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -141,43 +212,79 @@ async function playTrack(track) {
     body: JSON.stringify({ device_ids: [deviceId], play: false }),
   })
 
+  if (!transferResponse.ok) {
+    let message = 'Unable to activate the Spotify player device.'
+    try {
+      const data = await transferResponse.json()
+      message = data?.error?.message || message
+    } catch {
+      // Ignore JSON parsing errors and keep fallback message.
+    }
+    playerError.value = message
+    return
+  }
+
   const selectedTrackIndex = tracks.value.findIndex(
     playlistTrack => playlistTrack.track.id === track.id,
   )
 
   // Play the selected track in playlist context so Spotify can continue to the next one
-  await fetch('https://api.spotify.com/v1/me/player/play', {
-    method: 'PUT',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
+  const playResponse = await fetch(
+    `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(deviceId)}`,
+    {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(
+        isLikedSongs
+          ? {
+              uris: [track.uri],
+            }
+          : {
+              context_uri: playlistUri.value,
+              offset: { position: Math.max(selectedTrackIndex, 0) },
+            },
+      ),
     },
-    body: JSON.stringify(
-      isLikedSongs
-        ? {
-            uris: [track.uri],
-            device_id: deviceId,
-          }
-        : {
-            context_uri: playlistUri.value,
-            offset: { position: Math.max(selectedTrackIndex, 0) },
-            device_id: deviceId,
-          },
-    ),
-  })
+  )
+
+  if (!playResponse.ok) {
+    let message = 'Unable to start playback.'
+    try {
+      const data = await playResponse.json()
+      message = data?.error?.message || message
+    } catch {
+      // Ignore JSON parsing errors and keep fallback message.
+    }
+    playerError.value = message
+    return
+  }
 }
 
 async function togglePlayback() {
   spotifyPlayer?.togglePlay()
 }
 
+async function seekTrack(event) {
+  if (!playerReady.value || !spotifyPlayer) return
+
+  revealNowPlaying()
+  const nextPosition = Number(event.target.value)
+  currentPosition.value = nextPosition
+  await spotifyPlayer.seek(nextPosition)
+}
+
 async function previousTrack() {
   if (!playerReady.value) return
+  revealNowPlaying()
   await spotifyPlayer?.previousTrack()
 }
 
 async function nextTrack() {
   if (!playerReady.value) return
+  revealNowPlaying()
   await spotifyPlayer?.nextTrack()
 }
 
@@ -186,15 +293,39 @@ async function stopPlayback() {
     await spotifyPlayer.pause()
     isPlaying.value = false
     currentTrack.value = null
+    currentPosition.value = 0
+    trackDuration.value = 0
+    stopProgressTimer()
+    stopInactivityTimer()
+    showNowPlaying.value = true
   }
+}
+
+function formatTime(milliseconds) {
+  if (!milliseconds) return '0:00'
+
+  const totalSeconds = Math.floor(milliseconds / 1000)
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+
+  return `${minutes}:${String(seconds).padStart(2, '0')}`
 }
 
 onMounted(async () => {
   await fetchPlaylistTracks()
   await initPlayer()
+
+  window.addEventListener('mousemove', revealNowPlaying)
+  window.addEventListener('touchstart', revealNowPlaying, { passive: true })
+  window.addEventListener('keydown', revealNowPlaying)
 })
 
 onUnmounted(() => {
+  stopProgressTimer()
+  stopInactivityTimer()
+  window.removeEventListener('mousemove', revealNowPlaying)
+  window.removeEventListener('touchstart', revealNowPlaying)
+  window.removeEventListener('keydown', revealNowPlaying)
   spotifyPlayer?.disconnect()
 })
 </script>
@@ -251,24 +382,44 @@ onUnmounted(() => {
           currentTrack.artists.map(a => a.name).join(', ')
         }}</span>
       </div>
-      <button class="now-playing-btn" @click="togglePlayback">
-        {{ isPlaying ? '⏸' : '▶' }}
-      </button>
-      <button
-        class="now-playing-btn"
-        @click="previousTrack"
-        aria-label="Previous track"
-      >
-        ⏮
-      </button>
-      <button
-        class="now-playing-btn"
-        @click="nextTrack"
-        aria-label="Next track"
-      >
-        ⏭
-      </button>
-      <button class="now-playing-btn stop-btn" @click="stopPlayback">■</button>
+
+      <div class="now-playing-controls" :class="{ faded: !showNowPlaying }">
+        <div class="seek-row">
+          <span class="seek-time">{{ formatTime(currentPosition) }}</span>
+          <input
+            class="seek-bar"
+            type="range"
+            :min="0"
+            :max="trackDuration || 0"
+            :value="currentPosition"
+            step="1000"
+            :disabled="!trackDuration"
+            @input="seekTrack"
+          />
+          <span class="seek-time">{{ formatTime(trackDuration) }}</span>
+        </div>
+
+        <button class="now-playing-btn" @click="togglePlayback">
+          {{ isPlaying ? '⏸' : '▶' }}
+        </button>
+        <button
+          class="now-playing-btn"
+          @click="previousTrack"
+          aria-label="Previous track"
+        >
+          ⏮
+        </button>
+        <button
+          class="now-playing-btn"
+          @click="nextTrack"
+          aria-label="Next track"
+        >
+          ⏭
+        </button>
+        <button class="now-playing-btn stop-btn" @click="stopPlayback">
+          ■
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -392,6 +543,25 @@ onUnmounted(() => {
   padding: 0 1.5rem;
   box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.5);
   z-index: 100;
+  opacity: 1;
+  transition:
+    opacity 0.35s ease,
+    transform 0.35s ease;
+  transform: translateY(0);
+}
+
+.now-playing-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: 1;
+  transition: opacity 0.35s ease;
+  opacity: 1;
+}
+
+.now-playing-controls.faded {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .now-playing-cover {
@@ -423,6 +593,30 @@ onUnmounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.seek-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.seek-time {
+  font-size: 0.75rem;
+  color: #b3b3b3;
+  min-width: 2.8rem;
+}
+
+.seek-bar {
+  flex: 1;
+  accent-color: #1db954;
+  cursor: pointer;
+}
+
+.seek-bar:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 
 .now-playing-btn {

@@ -1,5 +1,4 @@
-<script setup>
-</script>
+<script setup></script>
 
 <template>
   <section class="app-intro">
@@ -9,7 +8,7 @@
       cover cards, a clean playlist view, and a track grid that makes browsing
       music feel fast and simple.
     </p>
-    <p class="features-list">
+    <div class="features-list">
       <strong>Features:</strong>
       <ul>
         <li>🎵 View your Spotify playlists as large cards</li>
@@ -17,7 +16,7 @@
         <li>▶️ Play tracks directly in the app</li>
         <li>🔐 Connect securely with your Spotify account</li>
       </ul>
-    </p>
+    </div>
     <p class="get-started">
       Connect from the navigation, then jump straight into your playlists.
     </p>
