@@ -2,11 +2,9 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { getValidAccessToken } from '../spotifyAuth.js'
 
 const playlists = ref([])
-const router = useRouter()
 
 async function fetchPlaylists() {
   const token = await getValidAccessToken()
@@ -26,80 +24,111 @@ onMounted(fetchPlaylists)
   <div class="playlists">
     <h1>Your Playlists</h1>
 
-    <!-- Liked Songs (special collection) -->
-    <div class="liked-songs-card">
-      <div class="liked-songs-cover">❤️</div>
-      <RouterLink to="/playlists/liked-songs" class="liked-songs-link">
-        Liked Songs
+    <div class="playlist-grid">
+      <RouterLink
+        to="/playlists/liked-songs"
+        class="playlist-card liked-songs-card"
+      >
+        <div class="playlist-cover liked-songs-cover">❤️</div>
+        <div class="playlist-info">
+          <h2>Liked Songs</h2>
+          <p>Your saved tracks</p>
+        </div>
+      </RouterLink>
+
+      <RouterLink
+        v-for="playlist in playlists"
+        :key="playlist.id"
+        :to="{ name: 'PlaylistDetail', params: { id: playlist.id } }"
+        class="playlist-card"
+      >
+        <img
+          v-if="playlist.images[0]?.url"
+          :src="playlist.images[0].url"
+          alt="Playlist cover"
+          class="playlist-cover"
+        />
+        <div v-else class="playlist-cover playlist-cover-fallback">♫</div>
+        <div class="playlist-info">
+          <h2>{{ playlist.name }}</h2>
+          <p>{{ playlist.tracks?.total ?? 0 }} tracks</p>
+        </div>
       </RouterLink>
     </div>
 
-    <!-- Regular playlists -->
-    <ul v-if="playlists.length">
-      <li v-for="playlist in playlists" :key="playlist.id">
-        <img
-          :src="playlist.images[0]?.url"
-          alt="Playlist cover"
-          width="50"
-          height="50"
-        />
-        <RouterLink
-          :to="{ name: 'PlaylistDetail', params: { id: playlist.id } }"
-        >
-          {{ playlist.name }}
-        </RouterLink>
-      </li>
-    </ul>
-    <p v-else>No playlists found.</p>
+    <p v-if="!playlists.length" class="empty-state">No playlists found.</p>
   </div>
 </template>
 
 <style scoped>
-.liked-songs-card {
+.playlists {
+  width: 100%;
+}
+
+.playlist-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 1rem;
+}
+
+.playlist-card {
   display: flex;
-  align-items: center;
-  gap: 15px;
-  margin-bottom: 20px;
-  padding: 12px;
-  background: linear-gradient(135deg, #1db954, #1ed760);
-  border-radius: 8px;
-  transition: transform 0.2s;
-}
-
-.liked-songs-card:hover {
-  transform: scale(1.02);
-}
-
-.liked-songs-cover {
-  font-size: 2.5rem;
-  width: 60px;
-  height: 60px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-}
-
-.liked-songs-link {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: white;
+  flex-direction: column;
   text-decoration: none;
+  color: inherit;
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
-.liked-songs-link:hover {
-  text-decoration: underline;
+.playlist-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.24);
 }
 
-ul {
-  list-style-type: none;
-  padding: 0;
+.playlist-cover {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  display: block;
+  background: linear-gradient(135deg, #1db954, #1ed760);
 }
 
-li {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.playlist-cover-fallback,
+.liked-songs-cover {
+  display: grid;
+  place-items: center;
+  font-size: 3rem;
+  color: white;
+}
+
+.liked-songs-card {
+  background: linear-gradient(135deg, #1db954, #1ed760);
+}
+
+.playlist-info {
+  padding: 0.9rem 1rem 1rem;
+}
+
+.playlist-info h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.playlist-info p {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  opacity: 0.78;
+}
+
+.empty-state {
+  margin-top: 1rem;
+  opacity: 0.75;
 }
 </style>
