@@ -6,6 +6,8 @@ import { getValidAccessToken } from '../spotifyAuth.js'
 
 const route = useRoute()
 const playlistId = route.params.id
+const isLikedSongs = playlistId === 'liked-songs'
+const playlistName = ref(isLikedSongs ? 'Liked Songs' : '')
 const tracks = ref([])
 const currentTrack = ref(null)
 const isPlaying = ref(false)
@@ -84,12 +86,34 @@ async function initPlayer() {
 async function fetchPlaylistTracks() {
   const token = await getValidAccessToken()
   if (!token) return
-  const res = await fetch(
-    `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
-    { headers: { Authorization: `Bearer ${token}` } },
-  )
-  const data = await res.json()
-  tracks.value = data.items
+
+  if (!isLikedSongs) {
+    const playlistResponse = await fetch(
+      `https://api.spotify.com/v1/playlists/${playlistId}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    )
+    const playlistData = await playlistResponse.json()
+    playlistName.value = playlistData.name || 'Playlist'
+  }
+
+  let allTracks = []
+  let endpoint = isLikedSongs
+    ? 'https://api.spotify.com/v1/me/tracks?limit=50'
+    : `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=50`
+
+  // Fetch all pages
+  while (endpoint) {
+    const res = await fetch(endpoint, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const data = await res.json()
+    allTracks = allTracks.concat(data.items)
+    endpoint = data.next // Fetch next page if it exists
+  }
+
+  tracks.value = allTracks
 }
 
 // ── Playback ──────────────────────────────────────────────────────────────────
@@ -150,7 +174,7 @@ onUnmounted(() => {
 
 <template>
   <div class="playlist-detail">
-    <h1>Playlist Tracks</h1>
+    <h1>{{ playlistName }}</h1>
 
     <!-- Player error (e.g. non-Premium account) -->
     <p v-if="playerError" class="player-error">⚠️ {{ playerError }}</p>
@@ -211,6 +235,10 @@ onUnmounted(() => {
 <style scoped>
 .playlist-detail {
   text-align: center;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
   padding-bottom: 100px;
 }
 
@@ -227,17 +255,18 @@ onUnmounted(() => {
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 10px;
-  margin-top: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+  width: 100%;
 }
 
 .grid-item {
   position: relative;
-  width: 150px;
-  height: 150px;
+  width: 100%;
+  aspect-ratio: 1 / 1;
   cursor: pointer;
-  border-radius: 8px;
+  border-radius: 2px;
   overflow: hidden;
   transition: box-shadow 0.2s;
 }

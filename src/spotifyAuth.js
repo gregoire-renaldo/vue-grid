@@ -64,7 +64,7 @@ export async function redirectToAuthCodeFlow() {
     client_id: clientId,
     response_type: 'code',
     redirect_uri: redirectUri,
-    scope: 'user-read-private user-read-email streaming',
+    scope: 'user-read-private user-read-email streaming user-library-read',
     code_challenge_method: 'S256',
     code_challenge: challenge,
   })
