@@ -99,7 +99,12 @@ onMounted(loadUserProfile)
     </div>
   </header>
   <main class="app-content">
-    <RouterView />
+    <RouterView v-slot="{ Component }">
+      <component
+        :is="Component"
+        v-bind="showHomeButtonPlacement ? { profile } : {}"
+      />
+    </RouterView>
   </main>
 
   <ConfirmModal

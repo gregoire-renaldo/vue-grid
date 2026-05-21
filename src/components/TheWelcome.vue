@@ -3,23 +3,23 @@
 
 <template>
   <section class="app-intro">
-    <h1>Welcome to Vue Grid</h1>
+    <h1>Explore your Spotify collection</h1>
     <p>
-      Browse and explore your Spotify playlists with beautiful flip-card animations.
-      Connect your Spotify account to get started and discover your music collection in a fresh,
-      interactive way.
+      Vue Grid turns your Spotify playlists into a visual experience with large
+      cover cards, a clean playlist view, and a track grid that makes browsing
+      music feel fast and simple.
     </p>
     <p class="features-list">
       <strong>Features:</strong>
       <ul>
-        <li>🎵 View all your Spotify playlists</li>
-        <li>🎨 Interactive flip-card animations</li>
-        <li>📋 Detailed track information and album art</li>
-        <li>🔐 Secure OAuth 2.0 authentication</li>
+        <li>🎵 View your Spotify playlists as large cards</li>
+        <li>🖼️ Open a playlist and see its tracks in a cover grid</li>
+        <li>▶️ Play tracks directly in the app</li>
+        <li>🔐 Connect securely with your Spotify account</li>
       </ul>
     </p>
     <p class="get-started">
-      Click "Connect to Spotify" in the navigation to begin!
+      Connect from the navigation, then jump straight into your playlists.
     </p>
   </section>
 </template>
