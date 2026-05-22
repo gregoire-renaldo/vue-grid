@@ -467,9 +467,12 @@ async function fetchPlaylistTracks() {
 async function playTrack(track) {
   if (isPreparingPlayback.value) return
 
-  // Toggle pause if clicking the same track
-  if (currentTrack.value?.id === track.id) {
-    spotifyPlayer.togglePlay()
+  // Toggle playback if clicking the currently active card.
+  // Use the same URI-aware matching as the UI highlight state.
+  if (isCurrentTrackCard(track)) {
+    if (!playerReady.value || !spotifyPlayer) return
+    revealNowPlaying()
+    await togglePlayback()
     return
   }
 
