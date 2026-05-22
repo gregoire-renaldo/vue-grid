@@ -7,9 +7,11 @@ vi.mock('../src/spotifyAuth.js', () => ({
 
 import Explore from '../src/views/Explore.vue'
 import { getValidAccessToken } from '../src/spotifyAuth.js'
+import { __resetSpotifyCacheForTests } from '../src/utils/spotifyCache.js'
 
 describe('Explore view', () => {
   beforeEach(() => {
+    __resetSpotifyCacheForTests()
     vi.unstubAllGlobals()
   })
 

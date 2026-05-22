@@ -6,6 +6,7 @@ const MEMORY_ENTRY_LIMIT = 4
 export const MAX_CACHE_BYTES = 100 * 1024 * 1024
 export const PLAYLISTS_TTL_MS = 30 * 60 * 1000
 export const TRACKS_TTL_MS = 12 * 60 * 60 * 1000
+export const EXPLORE_TTL_MS = 30 * 60 * 1000
 
 const hotCache = new Map()
 let dbPromise = null
@@ -195,12 +196,29 @@ export function createPlaylistTracksCacheKey(playlistId) {
   return `playlist:${playlistId}:tracks`
 }
 
+export function createExploreFeaturedCacheKey() {
+  return 'explore:featured'
+}
+
+export function createExploreSearchCacheKey(query) {
+  const normalizedQuery = String(query || '').trim().toLowerCase()
+  return `explore:search:${normalizedQuery}`
+}
+
 export function readCachedPlaylists() {
   return readEntry(createPlaylistsCacheKey())
 }
 
 export function readCachedPlaylistTracks(playlistId) {
   return readEntry(createPlaylistTracksCacheKey(playlistId))
+}
+
+export function readCachedExploreFeaturedPlaylists() {
+  return readEntry(createExploreFeaturedCacheKey())
+}
+
+export function readCachedExploreSearchResults(query) {
+  return readEntry(createExploreSearchCacheKey(query))
 }
 
 export function cachePlaylists(playlists) {
@@ -218,6 +236,24 @@ export function cachePlaylistTracks(playlistId, playlistData) {
     playlistData,
     TRACKS_TTL_MS,
     'tracks',
+  )
+}
+
+export function cacheExploreFeaturedPlaylists(playlists) {
+  return writeEntry(
+    createExploreFeaturedCacheKey(),
+    { playlists },
+    EXPLORE_TTL_MS,
+    'explore-featured',
+  )
+}
+
+export function cacheExploreSearchResults(query, playlists) {
+  return writeEntry(
+    createExploreSearchCacheKey(query),
+    { playlists },
+    EXPLORE_TTL_MS,
+    'explore-search',
   )
 }
 

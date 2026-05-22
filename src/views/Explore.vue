@@ -2,6 +2,13 @@
 import { onMounted, ref } from 'vue'
 import PlaylistCard from '../components/PlaylistCard.vue'
 import { getValidAccessToken } from '../spotifyAuth.js'
+import {
+  cacheExploreFeaturedPlaylists,
+  cacheExploreSearchResults,
+  isCacheStale,
+  readCachedExploreFeaturedPlaylists,
+  readCachedExploreSearchResults,
+} from '../utils/spotifyCache.js'
 
 const featuredPlaylists = ref([])
 const searchResults = ref([])
@@ -39,46 +46,93 @@ async function fetchPublicPlaylistFallback(token) {
   return normalizePlaylists(data?.playlists?.items || [])
 }
 
-async function fetchFeaturedPlaylists() {
+async function fetchFeaturedPlaylistsFromNetwork(token) {
+  const response = await fetch(
+    'https://api.spotify.com/v1/browse/featured-playlists?limit=24&country=US&locale=en_US',
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  )
+
+  let items = []
+
+  if (response.ok) {
+    const data = await response.json()
+    items = normalizePlaylists(data?.playlists?.items || [])
+    if (!items.length) {
+      items = await fetchPublicPlaylistFallback(token)
+    }
+  } else if (response.status === 404) {
+    items = await fetchPublicPlaylistFallback(token)
+  } else {
+    throw new Error('Unable to fetch featured playlists.')
+  }
+
+  featuredPlaylists.value = items
+  await cacheExploreFeaturedPlaylists(items)
+
+  return items
+}
+
+async function fetchFeaturedPlaylists(options = {}) {
+  const { forceRefresh = false } = options
   isFeaturedLoading.value = true
   featuredError.value = ''
 
   try {
+    const cachedEntry = await readCachedExploreFeaturedPlaylists()
+    if (cachedEntry?.value?.playlists?.length) {
+      featuredPlaylists.value = normalizePlaylists(cachedEntry.value.playlists)
+    }
+
+    if (!forceRefresh && cachedEntry && !isCacheStale(cachedEntry)) {
+      return cachedEntry.value.playlists
+    }
+
     const token = await getValidAccessToken()
     if (!token) {
       featuredError.value =
         'Connect your Spotify account to explore public playlists.'
-      return
+      return cachedEntry?.value?.playlists || []
     }
 
-    const response = await fetch(
-      'https://api.spotify.com/v1/browse/featured-playlists?limit=24&country=US&locale=en_US',
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    )
-
-    if (response.ok) {
-      const data = await response.json()
-      const items = normalizePlaylists(data?.playlists?.items || [])
-
-      if (items.length) {
-        featuredPlaylists.value = items
-        return
-      }
+    if (!forceRefresh && cachedEntry?.value?.playlists?.length) {
+      void fetchFeaturedPlaylistsFromNetwork(token).catch(error => {
+        if (!featuredPlaylists.value.length) {
+          featuredError.value =
+            error?.message || 'Unable to fetch public playlists.'
+        }
+      })
+      return cachedEntry.value.playlists
     }
 
-    if (response.status === 404 || response.ok) {
-      featuredPlaylists.value = await fetchPublicPlaylistFallback(token)
-      return
-    }
-
-    throw new Error('Unable to fetch featured playlists.')
+    return await fetchFeaturedPlaylistsFromNetwork(token)
   } catch (error) {
     featuredError.value = error?.message || 'Unable to fetch public playlists.'
+    return []
   } finally {
     isFeaturedLoading.value = false
   }
+}
+
+async function searchPublicPlaylistsFromNetwork(token, query) {
+  const response = await fetch(
+    `https://api.spotify.com/v1/search?type=playlist&limit=24&q=${encodeURIComponent(query)}`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  )
+
+  if (!response.ok) {
+    throw new Error('Unable to search public playlists.')
+  }
+
+  const data = await response.json()
+  const items = normalizePlaylists(data?.playlists?.items || [])
+  searchResults.value = items
+  await cacheExploreSearchResults(query, items)
+
+  return items
 }
 
 async function searchPublicPlaylists() {
@@ -93,31 +147,43 @@ async function searchPublicPlaylists() {
   searchError.value = ''
 
   try {
+    const cachedEntry = await readCachedExploreSearchResults(trimmedQuery)
+    if (cachedEntry?.value?.playlists) {
+      searchResults.value = normalizePlaylists(cachedEntry.value.playlists)
+    }
+
+    if (cachedEntry && !isCacheStale(cachedEntry)) {
+      return cachedEntry.value.playlists
+    }
+
     const token = await getValidAccessToken()
     if (!token) {
       searchError.value =
         'Connect your Spotify account to search public playlists.'
-      return
+      return cachedEntry?.value?.playlists || []
     }
 
-    const response = await fetch(
-      `https://api.spotify.com/v1/search?type=playlist&limit=24&q=${encodeURIComponent(trimmedQuery)}`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    )
-
-    if (!response.ok) {
-      throw new Error('Unable to search public playlists.')
+    if (cachedEntry?.value?.playlists) {
+      void searchPublicPlaylistsFromNetwork(token, trimmedQuery).catch(error => {
+        if (!searchResults.value.length) {
+          searchError.value =
+            error?.message || 'Unable to search public playlists.'
+        }
+      })
+      return cachedEntry.value.playlists
     }
 
-    const data = await response.json()
-    searchResults.value = normalizePlaylists(data?.playlists?.items || [])
+    return await searchPublicPlaylistsFromNetwork(token, trimmedQuery)
   } catch (error) {
     searchError.value = error?.message || 'Unable to search public playlists.'
+    return []
   } finally {
     isSearchLoading.value = false
   }
+}
+
+function refreshFeaturedPlaylists() {
+  fetchFeaturedPlaylists({ forceRefresh: true })
 }
 
 function onSearchSubmit() {
@@ -173,7 +239,7 @@ onMounted(fetchFeaturedPlaylists)
           type="button"
           class="refresh-btn"
           :disabled="isFeaturedLoading"
-          @click="fetchFeaturedPlaylists"
+          @click="refreshFeaturedPlaylists"
         >
           {{ isFeaturedLoading ? 'Refreshing...' : 'Refresh' }}
         </button>
