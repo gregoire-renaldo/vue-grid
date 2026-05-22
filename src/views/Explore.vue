@@ -164,12 +164,14 @@ async function searchPublicPlaylists() {
     }
 
     if (cachedEntry?.value?.playlists) {
-      void searchPublicPlaylistsFromNetwork(token, trimmedQuery).catch(error => {
-        if (!searchResults.value.length) {
-          searchError.value =
-            error?.message || 'Unable to search public playlists.'
-        }
-      })
+      void searchPublicPlaylistsFromNetwork(token, trimmedQuery).catch(
+        error => {
+          if (!searchResults.value.length) {
+            searchError.value =
+              error?.message || 'Unable to search public playlists.'
+          }
+        },
+      )
       return cachedEntry.value.playlists
     }
 

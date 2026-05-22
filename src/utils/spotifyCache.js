@@ -201,7 +201,9 @@ export function createExploreFeaturedCacheKey() {
 }
 
 export function createExploreSearchCacheKey(query) {
-  const normalizedQuery = String(query || '').trim().toLowerCase()
+  const normalizedQuery = String(query || '')
+    .trim()
+    .toLowerCase()
   return `explore:search:${normalizedQuery}`
 }
 
