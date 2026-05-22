@@ -3,6 +3,12 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { getValidAccessToken } from '../spotifyAuth.js'
+import {
+  extractSpotifyError,
+  formatTime,
+  isDeviceNotFoundMessage,
+  tracksMatch,
+} from '../utils/playlistDetailHelpers.js'
 
 const route = useRoute()
 const playlistId = route.params.id
@@ -27,17 +33,6 @@ let deviceId = null
 let progressTimer = null
 let inactivityTimer = null
 let lastProgressUpdateAt = 0
-
-function getTrackUris(track) {
-  const uris = new Set()
-  if (!track) return uris
-
-  if (track.uri) uris.add(track.uri)
-  if (track.linked_from?.uri) uris.add(track.linked_from.uri)
-  if (track.linkedFromUri) uris.add(track.linkedFromUri)
-
-  return uris
-}
 
 function setCurrentTrackFromTrack(track, playing = true) {
   if (!track) return
@@ -111,26 +106,6 @@ function logPlaybackDiagnostic(step, details = {}) {
     playerReady: playerReady.value,
     ...details,
   })
-}
-
-function isDeviceNotFoundMessage(message) {
-  return /device\s+not\s+found/i.test(String(message || ''))
-}
-
-async function extractSpotifyError(response, fallbackMessage) {
-  let message = fallbackMessage
-
-  try {
-    const data = await response.json()
-    message = data?.error?.message || data?.message || message
-  } catch {
-    // Keep fallback message.
-  }
-
-  return {
-    status: response.status,
-    message,
-  }
 }
 
 async function waitForPlayerReady(maxWaitMs = 8000) {
@@ -620,33 +595,8 @@ async function stopPlayback() {
   }
 }
 
-function formatTime(milliseconds) {
-  if (!milliseconds) return '0:00'
-
-  const totalSeconds = Math.floor(milliseconds / 1000)
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-
-  return `${minutes}:${String(seconds).padStart(2, '0')}`
-}
-
 function isCurrentTrackCard(track) {
-  if (!track || !currentTrack.value) return false
-
-  if (currentTrack.value.id && track.id) {
-    if (currentTrack.value.id === track.id) {
-      return true
-    }
-  }
-
-  const currentTrackUris = getTrackUris(currentTrack.value)
-  const cardTrackUris = getTrackUris(track)
-
-  for (const uri of currentTrackUris) {
-    if (cardTrackUris.has(uri)) return true
-  }
-
-  return false
+  return tracksMatch(currentTrack.value, track)
 }
 
 onMounted(async () => {
