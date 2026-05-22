@@ -1,11 +1,14 @@
 <script setup>
 import { RouterLink, RouterView, useRoute } from 'vue-router'
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import ConfirmModal from './components/ConfirmModal.vue'
+import NowPlayingBar from './components/NowPlayingBar.vue'
+import { useSpotifyPlayback } from './composables/useSpotifyPlayback.js'
 import {
   redirectToAuthCodeFlow,
   fetchProfile,
   getAccessToken,
+  getValidAccessToken,
   getSpotifyRedirectUri,
   signOutSpotify,
 } from './spotifyAuth.js'
@@ -14,6 +17,29 @@ const profile = ref(null)
 const authError = ref('')
 const showSignOutModal = ref(false)
 const route = useRoute()
+const playbackTracks = ref([])
+const playbackPlaylistUri = ref('')
+
+const {
+  currentTrack,
+  currentPosition,
+  trackDuration,
+  isPlaying,
+  showNowPlaying,
+  revealNowPlaying,
+  togglePlayback,
+  seekTrack,
+  previousTrack,
+  nextTrack,
+  stopPlayback,
+} = useSpotifyPlayback({
+  playlistId: 'app-shell',
+  isLikedSongs: false,
+  tracks: playbackTracks,
+  playlistUri: playbackPlaylistUri,
+  getValidAccessToken,
+})
+
 const showHomeButtonPlacement = computed(
   () => route.name === 'home' || route.name === 'Callback',
 )
@@ -63,6 +89,18 @@ async function loadUserProfile() {
 }
 
 onMounted(loadUserProfile)
+
+onMounted(() => {
+  window.addEventListener('mousemove', revealNowPlaying)
+  window.addEventListener('touchstart', revealNowPlaying, { passive: true })
+  window.addEventListener('keydown', revealNowPlaying)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('mousemove', revealNowPlaying)
+  window.removeEventListener('touchstart', revealNowPlaying)
+  window.removeEventListener('keydown', revealNowPlaying)
+})
 </script>
 
 <template>
@@ -98,7 +136,7 @@ onMounted(loadUserProfile)
       <p v-if="authError" class="auth-error">{{ authError }}</p>
     </div>
   </header>
-  <main class="app-content">
+  <main class="app-content" :class="{ 'has-now-playing': currentTrack }">
     <RouterView v-slot="{ Component }">
       <component
         :is="Component"
@@ -106,6 +144,20 @@ onMounted(loadUserProfile)
       />
     </RouterView>
   </main>
+
+  <NowPlayingBar
+    v-if="currentTrack"
+    :current-track="currentTrack"
+    :current-position="currentPosition"
+    :track-duration="trackDuration"
+    :is-playing="isPlaying"
+    :show-now-playing="showNowPlaying"
+    @toggle-playback="togglePlayback"
+    @previous-track="previousTrack"
+    @next-track="nextTrack"
+    @stop-playback="stopPlayback"
+    @seek-track="seekTrack"
+  />
 
   <ConfirmModal
     :open="showSignOutModal"
@@ -138,6 +190,10 @@ header {
 
 .app-content {
   width: 100%;
+}
+
+.app-content.has-now-playing {
+  padding-bottom: 100px;
 }
 
 nav {

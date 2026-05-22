@@ -1,17 +1,23 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 
-import { useSpotifyPlayback } from '../src/composables/useSpotifyPlayback.js'
+import {
+  __resetSpotifyPlaybackSingletonForTests,
+  useSpotifyPlayback,
+} from '../src/composables/useSpotifyPlayback.js'
 
 function createSpotifySdkMock() {
   const listeners = {}
   const togglePlay = vi.fn()
   const getCurrentState = vi.fn(() => null)
+  const disconnect = vi.fn()
+  const instanceCount = { value: 0 }
 
   return {
     Player: class MockPlayer {
       constructor() {
         this.listeners = listeners
+        instanceCount.value += 1
       }
 
       addListener(event, callback) {
@@ -36,17 +42,26 @@ function createSpotifySdkMock() {
       previousTrack() {}
       nextTrack() {}
       pause() {}
-      disconnect() {}
+      disconnect() {
+        return disconnect()
+      }
     },
     __mock: {
       listeners,
       togglePlay,
       getCurrentState,
+      disconnect,
+      instanceCount,
     },
   }
 }
 
 describe('useSpotifyPlayback', () => {
+  beforeEach(() => {
+    __resetSpotifyPlaybackSingletonForTests()
+    vi.unstubAllGlobals()
+  })
+
   it('initializes spotify player and becomes ready', async () => {
     const getValidAccessToken = vi.fn().mockResolvedValue('token')
     const tracks = ref([])
@@ -211,5 +226,35 @@ describe('useSpotifyPlayback', () => {
       }),
     )
     expect(playback.shuffleEnabled.value).toBe(false)
+  })
+
+  it('keeps player alive on regular disconnect and tears down only when forced', async () => {
+    const getValidAccessToken = vi.fn().mockResolvedValue('token')
+    const tracks = ref([])
+    const playlistUri = ref('spotify:playlist:roadtrip')
+
+    const sdk = createSpotifySdkMock()
+    vi.stubGlobal('Spotify', sdk)
+
+    const playback = useSpotifyPlayback({
+      playlistId: 'playlist-123',
+      isLikedSongs: false,
+      tracks,
+      playlistUri,
+      getValidAccessToken,
+    })
+
+    await playback.initPlayer()
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    playback.disconnectPlayer()
+    expect(sdk.__mock.disconnect).not.toHaveBeenCalled()
+
+    await playback.initPlayer()
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(sdk.__mock.instanceCount.value).toBe(1)
+
+    playback.disconnectPlayer({ force: true })
+    expect(sdk.__mock.disconnect).toHaveBeenCalledTimes(1)
   })
 })
