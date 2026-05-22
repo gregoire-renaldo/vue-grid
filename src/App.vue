@@ -109,6 +109,7 @@ onUnmounted(() => {
       <nav>
         <RouterLink to="/">Home</RouterLink>
         <RouterLink to="/playlists">Playlists</RouterLink>
+        <RouterLink to="/explore">Explore</RouterLink>
 
         <button
           v-if="!showHomeButtonPlacement"
