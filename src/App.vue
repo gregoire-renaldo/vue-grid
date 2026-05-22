@@ -1,6 +1,6 @@
 <script setup>
 import { RouterLink, RouterView, useRoute } from 'vue-router'
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, provide, ref, onMounted, onUnmounted } from 'vue'
 import ConfirmModal from './components/ConfirmModal.vue'
 import NowPlayingBar from './components/NowPlayingBar.vue'
 import { useSpotifyPlayback } from './composables/useSpotifyPlayback.js'
@@ -13,9 +13,16 @@ import {
   signOutSpotify,
 } from './spotifyAuth.js'
 
+const THEME_STORAGE_KEY = 'vue-grid-theme'
+const TRACK_ANIMATION_STORAGE_KEY = 'vue-grid-track-animation'
+const AVAILABLE_TRACK_ANIMATIONS = ['dust', 'pulse', 'equalizer', 'orbit']
+
 const profile = ref(null)
 const authError = ref('')
 const showSignOutModal = ref(false)
+const showSettingsMenu = ref(false)
+const darkModeEnabled = ref(false)
+const nowPlayingAnimation = ref('dust')
 const route = useRoute()
 const playbackTracks = ref([])
 const playbackPlaylistUri = ref('')
@@ -43,6 +50,8 @@ const {
 const showHomeButtonPlacement = computed(
   () => route.name === 'home' || route.name === 'Callback',
 )
+
+provide('nowPlayingAnimation', nowPlayingAnimation)
 
 async function connectToSpotify() {
   if (profile.value) {
@@ -88,9 +97,65 @@ async function loadUserProfile() {
   }
 }
 
+function applyTheme(enabled) {
+  const theme = enabled ? 'dark' : 'light'
+  document.documentElement.setAttribute('data-theme', theme)
+}
+
+function initializeTheme() {
+  const storedTheme = localStorage.getItem(THEME_STORAGE_KEY)
+  if (storedTheme === 'dark') {
+    darkModeEnabled.value = true
+  } else if (storedTheme === 'light') {
+    darkModeEnabled.value = false
+  } else {
+    darkModeEnabled.value = window.matchMedia(
+      '(prefers-color-scheme: dark)',
+    ).matches
+  }
+
+  applyTheme(darkModeEnabled.value)
+}
+
+function initializeTrackAnimation() {
+  const storedAnimation = localStorage.getItem(TRACK_ANIMATION_STORAGE_KEY)
+  if (storedAnimation && AVAILABLE_TRACK_ANIMATIONS.includes(storedAnimation)) {
+    nowPlayingAnimation.value = storedAnimation
+    return
+  }
+
+  nowPlayingAnimation.value = 'dust'
+}
+
+function toggleSettingsMenu() {
+  showSettingsMenu.value = !showSettingsMenu.value
+}
+
+function setDarkMode(enabled) {
+  darkModeEnabled.value = enabled
+  localStorage.setItem(THEME_STORAGE_KEY, enabled ? 'dark' : 'light')
+  applyTheme(enabled)
+}
+
+function onDarkModeChange(event) {
+  setDarkMode(event.target.checked)
+}
+
+function closeSettingsMenu() {
+  showSettingsMenu.value = false
+}
+
+function setTrackAnimation(animation) {
+  if (!AVAILABLE_TRACK_ANIMATIONS.includes(animation)) return
+  nowPlayingAnimation.value = animation
+  localStorage.setItem(TRACK_ANIMATION_STORAGE_KEY, animation)
+}
+
 onMounted(loadUserProfile)
 
 onMounted(() => {
+  initializeTheme()
+  initializeTrackAnimation()
   window.addEventListener('mousemove', revealNowPlaying)
   window.addEventListener('touchstart', revealNowPlaying, { passive: true })
   window.addEventListener('keydown', revealNowPlaying)
@@ -177,6 +242,80 @@ onUnmounted(() => {
       >.
     </p>
   </ConfirmModal>
+
+  <div class="settings-anchor">
+    <button
+      class="settings-wheel"
+      aria-label="Open settings"
+      @click="toggleSettingsMenu"
+    >
+      ⚙
+    </button>
+
+    <div v-if="showSettingsMenu" class="settings-menu" role="menu">
+      <div class="settings-menu-header">Display</div>
+      <label class="settings-item">
+        <span>Dark mode</span>
+        <input
+          type="checkbox"
+          :checked="darkModeEnabled"
+          @change="onDarkModeChange"
+        />
+      </label>
+
+      <div class="settings-section-title">Now Playing animation</div>
+      <div
+        class="settings-options"
+        role="radiogroup"
+        aria-label="Now playing animation"
+      >
+        <label class="settings-item settings-item-radio">
+          <span>Dust</span>
+          <input
+            type="radio"
+            name="track-animation"
+            value="dust"
+            :checked="nowPlayingAnimation === 'dust'"
+            @change="setTrackAnimation('dust')"
+          />
+        </label>
+        <label class="settings-item settings-item-radio">
+          <span>Pulse Rings</span>
+          <input
+            type="radio"
+            name="track-animation"
+            value="pulse"
+            :checked="nowPlayingAnimation === 'pulse'"
+            @change="setTrackAnimation('pulse')"
+          />
+        </label>
+        <label class="settings-item settings-item-radio">
+          <span>Equalizer Bars</span>
+          <input
+            type="radio"
+            name="track-animation"
+            value="equalizer"
+            :checked="nowPlayingAnimation === 'equalizer'"
+            @change="setTrackAnimation('equalizer')"
+          />
+        </label>
+        <label class="settings-item settings-item-radio">
+          <span>Orbit Glow</span>
+          <input
+            type="radio"
+            name="track-animation"
+            value="orbit"
+            :checked="nowPlayingAnimation === 'orbit'"
+            @change="setTrackAnimation('orbit')"
+          />
+        </label>
+      </div>
+
+      <button class="settings-close" type="button" @click="closeSettingsMenu">
+        Close
+      </button>
+    </div>
+  </div>
 </template>
 
 <style scoped>
@@ -249,6 +388,79 @@ nav a {
 
 nav a:first-of-type {
   border: 0;
+}
+
+.settings-anchor {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 120;
+}
+
+.settings-wheel {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  background: var(--color-background-soft);
+  color: var(--color-text);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.settings-menu {
+  position: absolute;
+  right: 0;
+  bottom: 56px;
+  width: 220px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-background-soft);
+  color: var(--color-text);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+  padding: 0.75rem;
+}
+
+.settings-menu-header {
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.settings-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.settings-item-radio {
+  font-size: 0.9rem;
+}
+
+.settings-section-title {
+  margin-top: 0.85rem;
+  margin-bottom: 0.4rem;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.settings-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.settings-close {
+  margin-top: 0.75rem;
+  width: 100%;
+  border: 1px solid var(--color-border);
+  background: var(--color-background);
+  color: var(--color-text);
+  border-radius: 8px;
+  padding: 0.35rem 0.5rem;
+  cursor: pointer;
 }
 
 @media (min-width: 1024px) {

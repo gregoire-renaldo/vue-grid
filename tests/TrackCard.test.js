@@ -43,4 +43,19 @@ describe('TrackCard', () => {
     expect(wrapper.emitted('select')).toHaveLength(1)
     expect(wrapper.emitted('select')[0]).toEqual([track])
   })
+
+  it('renders equalizer animation when configured', () => {
+    const wrapper = mount(TrackCard, {
+      props: {
+        track,
+        isCurrent: true,
+        isPlaying: true,
+        playingAnimation: 'equalizer',
+      },
+    })
+
+    expect(wrapper.find('.equalizer-layer').exists()).toBe(true)
+    expect(wrapper.findAll('.eq-bar')).toHaveLength(5)
+    expect(wrapper.find('.dust-layer').exists()).toBe(false)
+  })
 })
