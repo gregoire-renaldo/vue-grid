@@ -1,8 +1,14 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { usePlaylistTracks } from '../src/composables/usePlaylistTracks.js'
+import { __resetSpotifyCacheForTests } from '../src/utils/spotifyCache.js'
 
 describe('usePlaylistTracks', () => {
+  beforeEach(() => {
+    __resetSpotifyCacheForTests()
+    vi.unstubAllGlobals()
+  })
+
   it('fetches playlist metadata and all paginated tracks', async () => {
     const getValidAccessToken = vi.fn().mockResolvedValue('token')
     const onError = vi.fn()

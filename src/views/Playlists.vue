@@ -4,9 +4,17 @@
 import { computed, ref, onMounted } from 'vue'
 import { getValidAccessToken } from '../spotifyAuth.js'
 import PlaylistCard from '../components/PlaylistCard.vue'
+import { useCooldown } from '../composables/useCooldown.js'
+import {
+  cachePlaylists,
+  isCacheStale,
+  readCachedPlaylists,
+} from '../utils/spotifyCache.js'
 
 const playlists = ref([])
 const sortMode = ref('alpha-asc')
+const isRefreshing = ref(false)
+const { isCoolingDown, label: refreshLabel, startCooldown } = useCooldown(5000)
 
 const sortedPlaylists = computed(() => {
   const items = [...playlists.value]
@@ -24,17 +32,56 @@ const sortedPlaylists = computed(() => {
   }
 })
 
+async function fetchPlaylistsFromNetwork(token) {
+  const response = await fetch('https://api.spotify.com/v1/me/playlists', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const data = await response.json()
+  const nextPlaylists = (data.items || []).map((playlist, index) => ({
+    ...playlist,
+    _fetchedIndex: index,
+  }))
+
+  playlists.value = nextPlaylists
+  await cachePlaylists(nextPlaylists)
+
+  return nextPlaylists
+}
+
 async function fetchPlaylists() {
+  const cachedEntry = await readCachedPlaylists()
+
+  if (cachedEntry?.value?.playlists?.length) {
+    playlists.value = cachedEntry.value.playlists
+  }
+
+  if (cachedEntry && !isCacheStale(cachedEntry)) {
+    return cachedEntry.value.playlists
+  }
+
   const token = await getValidAccessToken()
   if (token) {
-    const response = await fetch('https://api.spotify.com/v1/me/playlists', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    const data = await response.json()
-    playlists.value = (data.items || []).map((playlist, index) => ({
-      ...playlist,
-      _fetchedIndex: index,
-    }))
+    if (cachedEntry?.value?.playlists?.length) {
+      void fetchPlaylistsFromNetwork(token)
+      return cachedEntry.value.playlists
+    }
+
+    return fetchPlaylistsFromNetwork(token)
+  }
+
+  return cachedEntry?.value || null
+}
+
+async function refreshPlaylists() {
+  if (isRefreshing.value || isCoolingDown.value) return
+
+  isRefreshing.value = true
+  startCooldown()
+
+  try {
+    await fetchPlaylists()
+  } finally {
+    isRefreshing.value = false
   }
 }
 
@@ -53,6 +100,13 @@ onMounted(fetchPlaylists)
         <option value="recent-old">Creation date (most recent first)</option>
         <option value="old-recent">Creation date (oldest first)</option>
       </select>
+      <button
+        class="refresh-btn"
+        :disabled="isRefreshing || isCoolingDown"
+        @click="refreshPlaylists"
+      >
+        {{ isRefreshing ? 'Refreshing…' : refreshLabel }}
+      </button>
     </div>
 
     <div class="playlist-grid">
@@ -91,6 +145,21 @@ onMounted(fetchPlaylists)
   color: inherit;
   border-radius: 8px;
   padding: 0.45rem 0.6rem;
+}
+
+.refresh-btn {
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(29, 185, 84, 0.14);
+  color: inherit;
+  border-radius: 999px;
+  padding: 0.45rem 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .playlist-grid {

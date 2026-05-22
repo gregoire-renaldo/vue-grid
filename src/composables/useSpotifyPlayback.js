@@ -663,6 +663,7 @@ export function useSpotifyPlayback({
     previousTrack,
     nextTrack,
     stopPlayback,
+    syncPlayerState,
   }
 }
 

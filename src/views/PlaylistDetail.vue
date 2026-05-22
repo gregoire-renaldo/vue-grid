@@ -5,6 +5,7 @@ import { useRoute } from 'vue-router'
 import { getValidAccessToken } from '../spotifyAuth.js'
 import { usePlaylistTracks } from '../composables/usePlaylistTracks.js'
 import { useSpotifyPlayback } from '../composables/useSpotifyPlayback.js'
+import { useCooldown } from '../composables/useCooldown.js'
 import PlaylistHeader from '../components/PlaylistHeader.vue'
 import TracksLoader from '../components/TracksLoader.vue'
 import TrackCard from '../components/TrackCard.vue'
@@ -13,6 +14,8 @@ const route = useRoute()
 const playlistId = route.params.id
 const isLikedSongs = playlistId === 'liked-songs'
 const gridRef = ref(null)
+const isRefreshing = ref(false)
+const { isCoolingDown, label: refreshLabel, startCooldown } = useCooldown(5000)
 
 const playerError = ref(null)
 
@@ -43,6 +46,7 @@ const {
   isCurrentTrackCard,
   playTrack,
   shufflePlay,
+  syncPlayerState,
 } = useSpotifyPlayback({
   playlistId,
   isLikedSongs,
@@ -50,6 +54,22 @@ const {
   playlistUri,
   getValidAccessToken,
 })
+
+async function refreshPlaylist() {
+  if (isRefreshing.value || isCoolingDown.value) return
+
+  isRefreshing.value = true
+  startCooldown()
+
+  try {
+    await Promise.all([
+      fetchPlaylistTracks({ forceRefresh: true }),
+      syncPlayerState(),
+    ])
+  } finally {
+    isRefreshing.value = false
+  }
+}
 
 watch(
   playbackPlayerError,
@@ -116,6 +136,16 @@ onUnmounted(() => {
       @shuffle-play="shufflePlay"
     />
 
+    <div class="page-actions">
+      <button
+        class="refresh-btn"
+        :disabled="isRefreshing || isCoolingDown"
+        @click="refreshPlaylist"
+      >
+        {{ isRefreshing ? 'Refreshing…' : refreshLabel }}
+      </button>
+    </div>
+
     <!-- Player error (e.g. non-Premium account) -->
     <p v-if="playerError" class="player-error">⚠️ {{ playerError }}</p>
     <!-- SDK still loading -->
@@ -145,6 +175,27 @@ onUnmounted(() => {
   max-width: 100%;
   margin: 0;
   padding: 0;
+}
+
+.page-actions {
+  display: flex;
+  justify-content: center;
+  margin: 0.75rem 0 0.5rem;
+}
+
+.refresh-btn {
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(29, 185, 84, 0.14);
+  color: inherit;
+  border-radius: 999px;
+  padding: 0.45rem 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .player-error {
