@@ -37,14 +37,14 @@ defineEmits(['select'])
       aria-hidden="true"
     >
       <span
-        v-for="n in 12"
+        v-for="n in 24"
         :key="`dust-${props.track.id}-${n}`"
         class="dust-particle"
         :style="{
           '--x': `${(n * 17) % 100}%`,
-          '--size': `${2 + (n % 3)}px`,
-          '--delay': `${(n % 6) * 0.55}s`,
-          '--duration': `${5.2 + (n % 5) * 0.7}s`,
+          '--size': `${10 + (n % 8)}px`,
+          '--delay': `${(n % 8) * 0.22}s`,
+          '--duration': `${6.4 + (n % 6) * 0.8}s`,
         }"
       />
     </div>
@@ -144,44 +144,45 @@ defineEmits(['select'])
   inset: 0;
   pointer-events: none;
   overflow: hidden;
-  z-index: 1;
+  z-index: 3;
 }
 
 .dust-particle {
   position: absolute;
-  left: var(--x);
+  left: var(--x, 50%);
   bottom: -8%;
-  width: var(--size);
-  height: var(--size);
+  width: var(--size, 12px);
+  height: var(--size, 12px);
   border-radius: 999px;
   background: radial-gradient(
     circle,
-    rgba(255, 255, 255, 0.72) 0%,
-    rgba(229, 229, 229, 0.45) 60%,
-    rgba(205, 205, 205, 0.05) 100%
+    rgba(255, 255, 255, 1) 0%,
+    rgba(178, 255, 214, 0.95) 40%,
+    rgba(69, 255, 154, 0.32) 72%,
+    rgba(0, 0, 0, 0) 100%
   );
-  animation: dust-float var(--duration) linear infinite;
-  animation-delay: var(--delay);
-  opacity: 0;
+  box-shadow:
+    0 0 12px rgba(120, 255, 186, 0.75),
+    0 0 20px rgba(74, 255, 153, 0.55);
+  will-change: transform, opacity;
+  opacity: 0.9;
+  animation: dust-float var(--duration, 5.4s) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
 }
 
 @keyframes dust-float {
   0% {
-    transform: translate3d(0, 0, 0) scale(0.7);
-    opacity: 0;
+    transform: translate3d(0, 0, 0) scale(0.85);
+    opacity: 0.72;
   }
 
-  10% {
-    opacity: 0.45;
-  }
-
-  65% {
-    opacity: 0.3;
+  50% {
+    opacity: 1;
   }
 
   100% {
-    transform: translate3d(12px, -120%, 0) scale(1.15);
-    opacity: 0;
+    transform: translate3d(18px, -108%, 0) scale(1.2);
+    opacity: 0.78;
   }
 }
 
