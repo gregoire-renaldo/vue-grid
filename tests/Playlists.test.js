@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../src/spotifyAuth.js', () => ({
   getValidAccessToken: vi.fn(),
@@ -7,6 +7,7 @@ vi.mock('../src/spotifyAuth.js', () => ({
 
 import Playlists from '../src/views/Playlists.vue'
 import { getValidAccessToken } from '../src/spotifyAuth.js'
+import { __resetSpotifyCacheForTests } from '../src/utils/spotifyCache.js'
 
 function mountPlaylists() {
   return mount(Playlists, {
@@ -22,6 +23,11 @@ function mountPlaylists() {
 }
 
 describe('Playlists view', () => {
+  beforeEach(() => {
+    __resetSpotifyCacheForTests()
+    vi.unstubAllGlobals()
+  })
+
   it('renders the liked songs entry and sorts playlists alphabetically by default', async () => {
     getValidAccessToken.mockResolvedValue('token')
     vi.stubGlobal(

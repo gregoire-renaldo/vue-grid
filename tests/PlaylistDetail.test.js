@@ -14,6 +14,7 @@ vi.mock('../src/spotifyAuth.js', () => ({
 import PlaylistDetail from '../src/views/PlaylistDetail.vue'
 import { getValidAccessToken } from '../src/spotifyAuth.js'
 import { __resetSpotifyPlaybackSingletonForTests } from '../src/composables/useSpotifyPlayback.js'
+import { __resetSpotifyCacheForTests } from '../src/utils/spotifyCache.js'
 
 function createSpotifyPlayerMock() {
   const listeners = {}
@@ -61,6 +62,7 @@ function createSpotifyPlayerMock() {
 describe('PlaylistDetail view', () => {
   beforeEach(() => {
     __resetSpotifyPlaybackSingletonForTests()
+    __resetSpotifyCacheForTests()
     vi.unstubAllGlobals()
   })
 
