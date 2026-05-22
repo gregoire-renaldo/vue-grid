@@ -19,6 +19,8 @@ const showNowPlaying = ref(true)
 const playerReady = ref(false)
 const playerError = ref(null)
 const isPreparingPlayback = ref(false)
+const tracksLoading = ref(false)
+const skeletonItems = Array.from({ length: 16 }, (_, index) => index)
 
 let spotifyPlayer = null
 let deviceId = null
@@ -417,37 +419,47 @@ async function initPlayer() {
 // ── Tracks ────────────────────────────────────────────────────────────────────
 
 async function fetchPlaylistTracks() {
+  tracksLoading.value = true
   const token = await getValidAccessToken()
-  if (!token) return
+  if (!token) {
+    tracksLoading.value = false
+    return
+  }
 
-  if (!isLikedSongs) {
-    const playlistResponse = await fetch(
-      `https://api.spotify.com/v1/playlists/${playlistId}`,
-      {
+  try {
+    if (!isLikedSongs) {
+      const playlistResponse = await fetch(
+        `https://api.spotify.com/v1/playlists/${playlistId}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      )
+      const playlistData = await playlistResponse.json()
+      playlistName.value = playlistData.name || 'Playlist'
+      playlistUri.value = playlistData.uri || ''
+    }
+
+    let allTracks = []
+    let endpoint = isLikedSongs
+      ? 'https://api.spotify.com/v1/me/tracks?limit=50'
+      : `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=50`
+
+    // Fetch all pages
+    while (endpoint) {
+      const res = await fetch(endpoint, {
         headers: { Authorization: `Bearer ${token}` },
-      },
-    )
-    const playlistData = await playlistResponse.json()
-    playlistName.value = playlistData.name || 'Playlist'
-    playlistUri.value = playlistData.uri || ''
+      })
+      const data = await res.json()
+      allTracks = allTracks.concat(data.items)
+      endpoint = data.next // Fetch next page if it exists
+    }
+
+    tracks.value = allTracks
+  } catch (error) {
+    playerError.value = error?.message || 'Unable to fetch playlist tracks.'
+  } finally {
+    tracksLoading.value = false
   }
-
-  let allTracks = []
-  let endpoint = isLikedSongs
-    ? 'https://api.spotify.com/v1/me/tracks?limit=50'
-    : `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=50`
-
-  // Fetch all pages
-  while (endpoint) {
-    const res = await fetch(endpoint, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    const data = await res.json()
-    allTracks = allTracks.concat(data.items)
-    endpoint = data.next // Fetch next page if it exists
-  }
-
-  tracks.value = allTracks
 }
 
 // ── Playback ──────────────────────────────────────────────────────────────────
@@ -679,7 +691,28 @@ onUnmounted(() => {
       Connecting to Spotify player…
     </p>
 
-    <div class="grid">
+    <div v-if="tracksLoading" class="loader-wrap" aria-live="polite">
+      <div class="loader-badge">
+        <span class="loader-spinner" aria-hidden="true" />
+        Loading tracks...
+      </div>
+
+      <div class="loader-grid">
+        <div
+          v-for="item in skeletonItems"
+          :key="`skeleton-${item}`"
+          class="loader-card"
+        >
+          <div class="loader-shimmer" />
+          <div class="loader-lines">
+            <span class="loader-line loader-line-main" />
+            <span class="loader-line loader-line-sub" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-else class="grid">
       <div
         v-for="track in tracks"
         :key="track.track.id"
@@ -840,6 +873,101 @@ onUnmounted(() => {
   color: #b3b3b3;
   margin: 0.5rem 0 1rem;
   font-style: italic;
+}
+
+.loader-wrap {
+  margin-top: 12px;
+}
+
+.loader-badge {
+  margin: 0 auto 14px;
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.38rem 0.8rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #d6d6d6;
+  font-size: 0.82rem;
+  letter-spacing: 0.01em;
+}
+
+.loader-spinner {
+  width: 0.95rem;
+  height: 0.95rem;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  border-top-color: #1db954;
+  animation: loader-spin 0.8s linear infinite;
+}
+
+.loader-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+
+.loader-card {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #171717;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.loader-shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    110deg,
+    rgba(255, 255, 255, 0.02) 8%,
+    rgba(255, 255, 255, 0.11) 18%,
+    rgba(255, 255, 255, 0.02) 33%
+  );
+  background-size: 200% 100%;
+  animation: loader-shimmer 1.25s linear infinite;
+}
+
+.loader-lines {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  z-index: 1;
+  display: grid;
+  gap: 6px;
+}
+
+.loader-line {
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.loader-line-main {
+  width: 72%;
+}
+
+.loader-line-sub {
+  width: 46%;
+  background: rgba(255, 255, 255, 0.11);
+}
+
+@keyframes loader-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes loader-shimmer {
+  to {
+    background-position-x: -200%;
+  }
 }
 
 .grid {
