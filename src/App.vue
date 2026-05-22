@@ -264,7 +264,11 @@ onUnmounted(() => {
       </label>
 
       <div class="settings-section-title">Now Playing animation</div>
-      <div class="settings-options" role="radiogroup" aria-label="Now playing animation">
+      <div
+        class="settings-options"
+        role="radiogroup"
+        aria-label="Now playing animation"
+      >
         <label class="settings-item settings-item-radio">
           <span>Dust</span>
           <input

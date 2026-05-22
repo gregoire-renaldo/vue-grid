@@ -36,7 +36,9 @@ defineEmits(['select'])
       class="card-cover"
     />
     <div
-      v-if="props.isCurrent && props.isPlaying && props.playingAnimation === 'dust'"
+      v-if="
+        props.isCurrent && props.isPlaying && props.playingAnimation === 'dust'
+      "
       class="dust-layer"
       aria-hidden="true"
     >
@@ -54,7 +56,9 @@ defineEmits(['select'])
     </div>
 
     <div
-      v-if="props.isCurrent && props.isPlaying && props.playingAnimation === 'pulse'"
+      v-if="
+        props.isCurrent && props.isPlaying && props.playingAnimation === 'pulse'
+      "
       class="pulse-layer"
       aria-hidden="true"
     >
@@ -64,15 +68,26 @@ defineEmits(['select'])
     </div>
 
     <div
-      v-if="props.isCurrent && props.isPlaying && props.playingAnimation === 'equalizer'"
+      v-if="
+        props.isCurrent &&
+        props.isPlaying &&
+        props.playingAnimation === 'equalizer'
+      "
       class="equalizer-layer"
       aria-hidden="true"
     >
-      <span v-for="n in 5" :key="`eq-${props.track.id}-${n}`" class="eq-bar" :style="{ '--delay': `${n * 0.08}s` }" />
+      <span
+        v-for="n in 5"
+        :key="`eq-${props.track.id}-${n}`"
+        class="eq-bar"
+        :style="{ '--delay': `${n * 0.08}s` }"
+      />
     </div>
 
     <div
-      v-if="props.isCurrent && props.isPlaying && props.playingAnimation === 'orbit'"
+      v-if="
+        props.isCurrent && props.isPlaying && props.playingAnimation === 'orbit'
+      "
       class="orbit-layer"
       aria-hidden="true"
     >
