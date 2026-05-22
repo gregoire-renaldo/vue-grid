@@ -16,7 +16,7 @@ describe('PlaylistHeader', () => {
     })
 
     expect(wrapper.text()).toContain('Road Trip')
-    expect(wrapper.text()).toContain('Shuffle Play')
+    expect(wrapper.text()).toContain('Enable Shuffle')
 
     await wrapper.find('.shuffle-btn').trigger('click')
 

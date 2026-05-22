@@ -42,8 +42,8 @@ defineEmits(['shuffle-play'])
         props.isPreparingPlayback
           ? 'Preparing…'
           : props.shuffleEnabled
-            ? 'Shuffle On'
-            : 'Shuffle Play'
+            ? 'Disable Shuffle'
+            : 'Enable Shuffle'
       }}
     </button>
   </div>
