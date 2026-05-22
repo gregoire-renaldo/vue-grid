@@ -6,6 +6,53 @@ import {
   tracksMatch,
 } from '../utils/playlistDetailHelpers.js'
 
+// Singleton player state shared across route navigations.
+const currentTrack = ref(null)
+const currentPosition = ref(0)
+const trackDuration = ref(0)
+const isPlaying = ref(false)
+const shuffleEnabled = ref(false)
+const showNowPlaying = ref(true)
+const playerReady = ref(false)
+const playerError = ref(null)
+const isPreparingPlayback = ref(false)
+
+let spotifyPlayer = null
+let deviceId = null
+let progressTimer = null
+let inactivityTimer = null
+let lastProgressUpdateAt = 0
+let listenersBound = false
+let initPlayerPromise = null
+let activePlaylistId = ''
+let tokenProvider = async () => null
+
+function resetSingletonState() {
+  currentTrack.value = null
+  currentPosition.value = 0
+  trackDuration.value = 0
+  isPlaying.value = false
+  shuffleEnabled.value = false
+  showNowPlaying.value = true
+  playerReady.value = false
+  playerError.value = null
+  isPreparingPlayback.value = false
+
+  if (progressTimer) {
+    clearInterval(progressTimer)
+    progressTimer = null
+  }
+  if (inactivityTimer) {
+    clearTimeout(inactivityTimer)
+    inactivityTimer = null
+  }
+
+  lastProgressUpdateAt = 0
+  deviceId = null
+  activePlaylistId = ''
+  tokenProvider = async () => null
+}
+
 export function useSpotifyPlayback({
   playlistId,
   isLikedSongs,
@@ -13,21 +60,8 @@ export function useSpotifyPlayback({
   playlistUri,
   getValidAccessToken,
 }) {
-  const currentTrack = ref(null)
-  const currentPosition = ref(0)
-  const trackDuration = ref(0)
-  const isPlaying = ref(false)
-  const shuffleEnabled = ref(false)
-  const showNowPlaying = ref(true)
-  const playerReady = ref(false)
-  const playerError = ref(null)
-  const isPreparingPlayback = ref(false)
-
-  let spotifyPlayer = null
-  let deviceId = null
-  let progressTimer = null
-  let inactivityTimer = null
-  let lastProgressUpdateAt = 0
+  activePlaylistId = playlistId
+  tokenProvider = getValidAccessToken
 
   function setCurrentTrackFromTrack(track, playing = true) {
     if (!track) return
@@ -96,7 +130,7 @@ export function useSpotifyPlayback({
 
   function logPlaybackDiagnostic(step, details = {}) {
     console.debug(`[Playback] ${step}`, {
-      playlistId,
+      playlistId: activePlaylistId,
       deviceId,
       playerReady: playerReady.value,
       ...details,
@@ -351,46 +385,68 @@ export function useSpotifyPlayback({
   }
 
   async function initPlayer() {
-    await loadSDK()
+    if (playerReady.value && spotifyPlayer) return
 
-    spotifyPlayer = new window.Spotify.Player({
-      name: 'Vue Grid Player',
-      getOAuthToken: async cb => {
-        cb(await getValidAccessToken())
-      },
-      volume: 0.8,
-    })
+    if (initPlayerPromise) {
+      await initPlayerPromise
+      return
+    }
 
-    spotifyPlayer.addListener('ready', ({ device_id }) => {
-      deviceId = device_id
-      playerReady.value = true
-      logPlaybackDiagnostic('sdk-ready', { device_id })
-    })
+    initPlayerPromise = (async () => {
+      await loadSDK()
 
-    spotifyPlayer.addListener('not_ready', () => {
-      logPlaybackDiagnostic('sdk-not-ready')
-      deviceId = null
-      playerReady.value = false
-    })
+      if (!spotifyPlayer) {
+        spotifyPlayer = new window.Spotify.Player({
+          name: 'Vue Grid Player',
+          getOAuthToken: async cb => {
+            cb(await tokenProvider())
+          },
+          volume: 0.8,
+        })
+      }
 
-    spotifyPlayer.addListener('player_state_changed', state => {
-      applyPlayerState(state)
-    })
+      if (!listenersBound) {
+        spotifyPlayer.addListener('ready', ({ device_id }) => {
+          deviceId = device_id
+          playerReady.value = true
+          logPlaybackDiagnostic('sdk-ready', { device_id })
+        })
 
-    spotifyPlayer.addListener('initialization_error', ({ message }) => {
-      playerError.value = `Init error: ${message}`
-    })
+        spotifyPlayer.addListener('not_ready', () => {
+          logPlaybackDiagnostic('sdk-not-ready')
+          deviceId = null
+          playerReady.value = false
+        })
 
-    spotifyPlayer.addListener('authentication_error', ({ message }) => {
-      playerError.value = `Auth error: ${message}`
-    })
+        spotifyPlayer.addListener('player_state_changed', state => {
+          applyPlayerState(state)
+        })
 
-    spotifyPlayer.addListener('account_error', () => {
-      playerError.value = 'Spotify Premium is required for in-browser playback.'
-    })
+        spotifyPlayer.addListener('initialization_error', ({ message }) => {
+          playerError.value = `Init error: ${message}`
+        })
 
-    const connected = await spotifyPlayer.connect()
-    logPlaybackDiagnostic('sdk-connect-result', { connected })
+        spotifyPlayer.addListener('authentication_error', ({ message }) => {
+          playerError.value = `Auth error: ${message}`
+        })
+
+        spotifyPlayer.addListener('account_error', () => {
+          playerError.value =
+            'Spotify Premium is required for in-browser playback.'
+        })
+
+        listenersBound = true
+      }
+
+      const connected = await spotifyPlayer.connect()
+      logPlaybackDiagnostic('sdk-connect-result', { connected })
+    })()
+
+    try {
+      await initPlayerPromise
+    } finally {
+      initPlayerPromise = null
+    }
   }
 
   async function playTrack(track) {
@@ -571,10 +627,19 @@ export function useSpotifyPlayback({
     }
   }
 
-  function disconnectPlayer() {
+  function disconnectPlayer(options = {}) {
+    if (!options.force) {
+      // Keep singleton alive across view navigation.
+      return
+    }
+
     stopProgressTimer()
     stopInactivityTimer()
     spotifyPlayer?.disconnect()
+    spotifyPlayer = null
+    deviceId = null
+    playerReady.value = false
+    listenersBound = false
   }
 
   return {
@@ -599,4 +664,12 @@ export function useSpotifyPlayback({
     nextTrack,
     stopPlayback,
   }
+}
+
+export function __resetSpotifyPlaybackSingletonForTests() {
+  spotifyPlayer?.disconnect?.()
+  spotifyPlayer = null
+  listenersBound = false
+  initPlayerPromise = null
+  resetSingletonState()
 }

@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('vue-router', () => ({
   useRoute: () => ({
@@ -13,6 +13,7 @@ vi.mock('../src/spotifyAuth.js', () => ({
 
 import PlaylistDetail from '../src/views/PlaylistDetail.vue'
 import { getValidAccessToken } from '../src/spotifyAuth.js'
+import { __resetSpotifyPlaybackSingletonForTests } from '../src/composables/useSpotifyPlayback.js'
 
 function createSpotifyPlayerMock() {
   const listeners = {}
@@ -58,6 +59,11 @@ function createSpotifyPlayerMock() {
 }
 
 describe('PlaylistDetail view', () => {
+  beforeEach(() => {
+    __resetSpotifyPlaybackSingletonForTests()
+    vi.unstubAllGlobals()
+  })
+
   it('shows a loader while tracks are being fetched and then renders the tracks', async () => {
     getValidAccessToken.mockResolvedValue('token')
 

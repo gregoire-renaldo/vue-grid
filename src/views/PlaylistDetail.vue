@@ -8,7 +8,6 @@ import { useSpotifyPlayback } from '../composables/useSpotifyPlayback.js'
 import PlaylistHeader from '../components/PlaylistHeader.vue'
 import TracksLoader from '../components/TracksLoader.vue'
 import TrackCard from '../components/TrackCard.vue'
-import NowPlayingBar from '../components/NowPlayingBar.vue'
 
 const route = useRoute()
 const playlistId = route.params.id
@@ -34,25 +33,16 @@ const {
 
 const {
   currentTrack,
-  currentPosition,
-  trackDuration,
   isPlaying,
   shuffleEnabled,
-  showNowPlaying,
   playerReady,
   playerError: playbackPlayerError,
   isPreparingPlayback,
   initPlayer,
   disconnectPlayer,
-  revealNowPlaying,
   isCurrentTrackCard,
   playTrack,
   shufflePlay,
-  togglePlayback,
-  seekTrack,
-  previousTrack,
-  nextTrack,
-  stopPlayback,
 } = useSpotifyPlayback({
   playlistId,
   isLikedSongs,
@@ -108,16 +98,9 @@ watch(
 
 onMounted(async () => {
   await Promise.all([fetchPlaylistTracks(), initPlayer()])
-
-  window.addEventListener('mousemove', revealNowPlaying)
-  window.addEventListener('touchstart', revealNowPlaying, { passive: true })
-  window.addEventListener('keydown', revealNowPlaying)
 })
 
 onUnmounted(() => {
-  window.removeEventListener('mousemove', revealNowPlaying)
-  window.removeEventListener('touchstart', revealNowPlaying)
-  window.removeEventListener('keydown', revealNowPlaying)
   disconnectPlayer()
 })
 </script>
@@ -152,20 +135,6 @@ onUnmounted(() => {
         @select="playTrack"
       />
     </div>
-
-    <NowPlayingBar
-      v-if="currentTrack"
-      :current-track="currentTrack"
-      :current-position="currentPosition"
-      :track-duration="trackDuration"
-      :is-playing="isPlaying"
-      :show-now-playing="showNowPlaying"
-      @toggle-playback="togglePlayback"
-      @previous-track="previousTrack"
-      @next-track="nextTrack"
-      @stop-playback="stopPlayback"
-      @seek-track="seekTrack"
-    />
   </div>
 </template>
 
@@ -176,7 +145,6 @@ onUnmounted(() => {
   max-width: 100%;
   margin: 0;
   padding: 0;
-  padding-bottom: 100px;
 }
 
 .player-error {
