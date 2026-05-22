@@ -1,6 +1,6 @@
 <!-- src/views/PlaylistDetail.vue -->
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { nextTick, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { getValidAccessToken } from '../spotifyAuth.js'
 import { usePlaylistTracks } from '../composables/usePlaylistTracks.js'
@@ -13,6 +13,7 @@ import NowPlayingBar from '../components/NowPlayingBar.vue'
 const route = useRoute()
 const playlistId = route.params.id
 const isLikedSongs = playlistId === 'liked-songs'
+const gridRef = ref(null)
 
 const playerError = ref(null)
 
@@ -70,6 +71,41 @@ watch(
   { immediate: true },
 )
 
+async function scrollToCurrentTrackCard() {
+  await nextTick()
+
+  const currentTrackIndex = tracks.value.findIndex(trackItem =>
+    isCurrentTrackCard(trackItem.track),
+  )
+  if (currentTrackIndex < 0) return
+
+  const gridCards = gridRef.value?.querySelectorAll('.grid-item')
+  const targetCard = gridCards?.[currentTrackIndex]
+  if (!targetCard) return
+
+  const viewportHeight =
+    window.innerHeight || document.documentElement.clientHeight
+  const rect = targetCard.getBoundingClientRect()
+  const fullyVisible = rect.top >= 0 && rect.bottom <= viewportHeight
+
+  if (!fullyVisible) {
+    targetCard.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+      inline: 'nearest',
+    })
+  }
+}
+
+watch(
+  [() => currentTrack.value?.id, isPlaying],
+  ([currentTrackId, playing], [previousTrackId]) => {
+    if (!playing || !currentTrackId) return
+    if (currentTrackId === previousTrackId) return
+    scrollToCurrentTrackCard()
+  },
+)
+
 onMounted(async () => {
   await Promise.all([fetchPlaylistTracks(), initPlayer()])
 
@@ -106,7 +142,7 @@ onUnmounted(() => {
 
     <TracksLoader v-if="tracksLoading" />
 
-    <div v-else class="grid">
+    <div v-else ref="gridRef" class="grid">
       <TrackCard
         v-for="track in tracks"
         :key="track.track.id"

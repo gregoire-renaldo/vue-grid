@@ -35,6 +35,8 @@ describe('TrackCard', () => {
     })
 
     expect(wrapper.text()).toContain('⏸')
+    expect(wrapper.find('.dust-layer').exists()).toBe(true)
+    expect(wrapper.findAll('.dust-particle')).toHaveLength(24)
 
     await wrapper.find('.grid-item').trigger('click')
 

@@ -457,6 +457,30 @@ export function useSpotifyPlayback({
     isPreparingPlayback.value = true
 
     try {
+      if (shuffleEnabled.value) {
+        const disableShuffleResponse = await fetch(
+          `https://api.spotify.com/v1/me/player/shuffle?state=false&device_id=${encodeURIComponent(deviceId)}`,
+          {
+            method: 'PUT',
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        )
+
+        if (!disableShuffleResponse.ok) {
+          const error = await extractSpotifyError(
+            disableShuffleResponse,
+            'Unable to disable shuffle mode.',
+          )
+          throw new Error(error.message)
+        }
+
+        shuffleEnabled.value = false
+        await syncPlayerState()
+        return
+      }
+
       await ensurePlaybackDeviceReady(token)
 
       await transferPlaybackToWebPlayer(token)
