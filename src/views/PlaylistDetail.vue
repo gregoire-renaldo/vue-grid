@@ -1,6 +1,6 @@
 <!-- src/views/PlaylistDetail.vue -->
 <script setup>
-import { nextTick, ref, onMounted, onUnmounted, watch } from 'vue'
+import { inject, nextTick, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { getValidAccessToken } from '../spotifyAuth.js'
 import { usePlaylistTracks } from '../composables/usePlaylistTracks.js'
@@ -15,6 +15,7 @@ const playlistId = route.params.id
 const isLikedSongs = playlistId === 'liked-songs'
 const gridRef = ref(null)
 const isRefreshing = ref(false)
+const nowPlayingAnimation = inject('nowPlayingAnimation', ref('dust'))
 const { isCoolingDown, label: refreshLabel, startCooldown } = useCooldown(5000)
 
 const playerError = ref(null)
@@ -162,6 +163,7 @@ onUnmounted(() => {
         :track="track.track"
         :is-current="isCurrentTrackCard(track.track)"
         :is-playing="isPlaying"
+        :playing-animation="nowPlayingAnimation"
         @select="playTrack"
       />
     </div>

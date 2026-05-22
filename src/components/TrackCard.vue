@@ -12,6 +12,10 @@ const props = defineProps({
     type: Boolean,
     required: true,
   },
+  playingAnimation: {
+    type: String,
+    default: 'dust',
+  },
 })
 
 defineEmits(['select'])
@@ -32,7 +36,7 @@ defineEmits(['select'])
       class="card-cover"
     />
     <div
-      v-if="props.isCurrent && props.isPlaying"
+      v-if="props.isCurrent && props.isPlaying && props.playingAnimation === 'dust'"
       class="dust-layer"
       aria-hidden="true"
     >
@@ -47,6 +51,34 @@ defineEmits(['select'])
           '--duration': `${6.4 + (n % 6) * 0.8}s`,
         }"
       />
+    </div>
+
+    <div
+      v-if="props.isCurrent && props.isPlaying && props.playingAnimation === 'pulse'"
+      class="pulse-layer"
+      aria-hidden="true"
+    >
+      <span class="pulse-ring ring-1" />
+      <span class="pulse-ring ring-2" />
+      <span class="pulse-ring ring-3" />
+    </div>
+
+    <div
+      v-if="props.isCurrent && props.isPlaying && props.playingAnimation === 'equalizer'"
+      class="equalizer-layer"
+      aria-hidden="true"
+    >
+      <span v-for="n in 5" :key="`eq-${props.track.id}-${n}`" class="eq-bar" :style="{ '--delay': `${n * 0.08}s` }" />
+    </div>
+
+    <div
+      v-if="props.isCurrent && props.isPlaying && props.playingAnimation === 'orbit'"
+      class="orbit-layer"
+      aria-hidden="true"
+    >
+      <span class="orbit-ring orbit-ring-1"><span class="orbit-dot" /></span>
+      <span class="orbit-ring orbit-ring-2"><span class="orbit-dot" /></span>
+      <span class="orbit-ring orbit-ring-3"><span class="orbit-dot" /></span>
     </div>
     <div class="card-overlay">
       <div class="overlay-icon">
@@ -147,6 +179,15 @@ defineEmits(['select'])
   z-index: 3;
 }
 
+.pulse-layer,
+.equalizer-layer,
+.orbit-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
 .dust-particle {
   position: absolute;
   left: var(--x, 50%);
@@ -183,6 +224,121 @@ defineEmits(['select'])
   100% {
     transform: translate3d(18px, -108%, 0) scale(1.2);
     opacity: 0.78;
+  }
+}
+
+.pulse-layer {
+  display: grid;
+  place-items: center;
+}
+
+.pulse-ring {
+  position: absolute;
+  width: 42%;
+  aspect-ratio: 1 / 1;
+  border-radius: 999px;
+  border: 2px solid rgba(120, 255, 186, 0.8);
+  box-shadow: 0 0 14px rgba(74, 255, 153, 0.5);
+  animation: pulse-expand 2s ease-out infinite;
+}
+
+.ring-2 {
+  animation-delay: 0.5s;
+}
+
+.ring-3 {
+  animation-delay: 1s;
+}
+
+@keyframes pulse-expand {
+  0% {
+    transform: scale(0.65);
+    opacity: 0.95;
+  }
+
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+.equalizer-layer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 6px;
+  padding-bottom: 18%;
+}
+
+.eq-bar {
+  width: 8px;
+  height: 20%;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #79ffba 0%, #1db954 100%);
+  box-shadow: 0 0 12px rgba(84, 255, 164, 0.45);
+  animation: eq-bounce 0.9s ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+@keyframes eq-bounce {
+  0%,
+  100% {
+    height: 14%;
+  }
+
+  40% {
+    height: 44%;
+  }
+
+  70% {
+    height: 26%;
+  }
+}
+
+.orbit-layer {
+  display: grid;
+  place-items: center;
+}
+
+.orbit-ring {
+  position: absolute;
+  width: 58%;
+  aspect-ratio: 1 / 1;
+  border-radius: 999px;
+  border: 1px solid rgba(121, 255, 186, 0.35);
+  animation: orbit-spin 2.8s linear infinite;
+}
+
+.orbit-ring-2 {
+  width: 44%;
+  animation-duration: 2.2s;
+  animation-direction: reverse;
+}
+
+.orbit-ring-3 {
+  width: 30%;
+  animation-duration: 1.7s;
+}
+
+.orbit-dot {
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: #88ffc1;
+  box-shadow: 0 0 10px rgba(120, 255, 186, 0.85);
+}
+
+@keyframes orbit-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
   }
 }
 
