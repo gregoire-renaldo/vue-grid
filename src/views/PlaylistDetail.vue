@@ -18,6 +18,7 @@ const shuffleEnabled = ref(false)
 const showNowPlaying = ref(true)
 const playerReady = ref(false)
 const playerError = ref(null)
+const isPreparingPlayback = ref(false)
 
 let spotifyPlayer = null
 let deviceId = null
@@ -99,6 +100,198 @@ function applyPlayerState(state) {
 
 function wait(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function logPlaybackDiagnostic(step, details = {}) {
+  console.debug(`[Playback] ${step}`, {
+    playlistId,
+    deviceId,
+    playerReady: playerReady.value,
+    ...details,
+  })
+}
+
+function isDeviceNotFoundMessage(message) {
+  return /device\s+not\s+found/i.test(String(message || ''))
+}
+
+async function extractSpotifyError(response, fallbackMessage) {
+  let message = fallbackMessage
+
+  try {
+    const data = await response.json()
+    message = data?.error?.message || data?.message || message
+  } catch {
+    // Keep fallback message.
+  }
+
+  return {
+    status: response.status,
+    message,
+  }
+}
+
+async function waitForPlayerReady(maxWaitMs = 8000) {
+  const start = Date.now()
+
+  while (Date.now() - start < maxWaitMs) {
+    if (playerReady.value && deviceId) {
+      return true
+    }
+    await wait(100)
+  }
+
+  return false
+}
+
+async function fetchPlayerDevices(token) {
+  const response = await fetch('https://api.spotify.com/v1/me/player/devices', {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+
+  if (!response.ok) {
+    const error = await extractSpotifyError(
+      response,
+      'Unable to fetch Spotify devices.',
+    )
+    throw new Error(error.message)
+  }
+
+  const data = await response.json()
+  return data?.devices || []
+}
+
+async function waitForDeviceRegistration(token, maxAttempts = 8) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const devices = await fetchPlayerDevices(token)
+    const found = devices.find(device => device.id === deviceId)
+
+    logPlaybackDiagnostic('device-registration-check', {
+      attempt,
+      found: Boolean(found),
+      devices: devices.map(device => ({
+        id: device.id,
+        is_active: device.is_active,
+        name: device.name,
+        type: device.type,
+      })),
+    })
+
+    if (found) return true
+
+    if (attempt === Math.ceil(maxAttempts / 2)) {
+      const connected = await spotifyPlayer?.connect?.()
+      logPlaybackDiagnostic('device-registration-reconnect', { connected })
+    }
+
+    await wait(220 * attempt)
+  }
+
+  return false
+}
+
+async function ensurePlaybackDeviceReady(token) {
+  await spotifyPlayer?.activateElement?.()
+
+  if (!playerReady.value || !deviceId) {
+    const connected = await spotifyPlayer?.connect?.()
+    logPlaybackDiagnostic('ensure-device-connect', { connected })
+  }
+
+  const sdkReady = await waitForPlayerReady()
+  if (!sdkReady) {
+    throw new Error(
+      'Spotify player is still connecting. Please wait a second and try again.',
+    )
+  }
+
+  const registered = await waitForDeviceRegistration(token)
+  if (!registered) {
+    throw new Error(
+      'Spotify player device not available yet. Please try again in a moment.',
+    )
+  }
+}
+
+async function transferPlaybackToWebPlayer(token, attempts = 4) {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    const transferResponse = await fetch(
+      'https://api.spotify.com/v1/me/player',
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ device_ids: [deviceId], play: false }),
+      },
+    )
+
+    if (transferResponse.ok) {
+      logPlaybackDiagnostic('transfer-success', { attempt })
+      return
+    }
+
+    const error = await extractSpotifyError(
+      transferResponse,
+      'Unable to activate the Spotify player device.',
+    )
+    logPlaybackDiagnostic('transfer-failed', {
+      attempt,
+      status: error.status,
+      message: error.message,
+    })
+
+    if (isDeviceNotFoundMessage(error.message) && attempt < attempts) {
+      await ensurePlaybackDeviceReady(token)
+      await wait(250 * attempt)
+      continue
+    }
+
+    throw new Error(error.message)
+  }
+}
+
+async function startPlaybackRequest(token, body, attempts = 3) {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    const playResponse = await fetch(
+      `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(deviceId)}`,
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      },
+    )
+
+    if (playResponse.ok) {
+      logPlaybackDiagnostic('play-success', { attempt })
+      return
+    }
+
+    const error = await extractSpotifyError(
+      playResponse,
+      'Unable to start playback.',
+    )
+    logPlaybackDiagnostic('play-failed', {
+      attempt,
+      status: error.status,
+      message: error.message,
+    })
+
+    if (isDeviceNotFoundMessage(error.message) && attempt < attempts) {
+      await ensurePlaybackDeviceReady(token)
+      await transferPlaybackToWebPlayer(token, 2)
+      await wait(300 * attempt)
+      continue
+    }
+
+    throw new Error(error.message)
+  }
 }
 
 async function syncPlayerState(retries = 5, delayMs = 120) {
@@ -194,9 +387,11 @@ async function initPlayer() {
   spotifyPlayer.addListener('ready', ({ device_id }) => {
     deviceId = device_id
     playerReady.value = true
+    logPlaybackDiagnostic('sdk-ready', { device_id })
   })
 
   spotifyPlayer.addListener('not_ready', () => {
+    logPlaybackDiagnostic('sdk-not-ready')
     deviceId = null
     playerReady.value = false
   })
@@ -215,7 +410,8 @@ async function initPlayer() {
     playerError.value = 'Spotify Premium is required for in-browser playback.'
   })
 
-  spotifyPlayer.connect()
+  const connected = await spotifyPlayer.connect()
+  logPlaybackDiagnostic('sdk-connect-result', { connected })
 }
 
 // ── Tracks ────────────────────────────────────────────────────────────────────
@@ -257,7 +453,7 @@ async function fetchPlaylistTracks() {
 // ── Playback ──────────────────────────────────────────────────────────────────
 
 async function playTrack(track) {
-  if (!playerReady.value || !deviceId) return
+  if (isPreparingPlayback.value) return
 
   // Toggle pause if clicking the same track
   if (currentTrack.value?.id === track.id) {
@@ -273,76 +469,40 @@ async function playTrack(track) {
   }
 
   playerError.value = null
+  isPreparingPlayback.value = true
 
-  // Some browsers require this user-gesture activation before remote playback commands.
-  await spotifyPlayer.activateElement?.()
+  try {
+    await ensurePlaybackDeviceReady(token)
+    logPlaybackDiagnostic('ready-check', { ready: true, trackId: track.id })
 
-  // Transfer playback to this browser tab
-  const transferResponse = await fetch('https://api.spotify.com/v1/me/player', {
-    method: 'PUT',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ device_ids: [deviceId], play: false }),
-  })
+    await transferPlaybackToWebPlayer(token)
 
-  if (!transferResponse.ok) {
-    let message = 'Unable to activate the Spotify player device.'
-    try {
-      const data = await transferResponse.json()
-      message = data?.error?.message || message
-    } catch {
-      // Ignore JSON parsing errors and keep fallback message.
-    }
-    playerError.value = message
-    return
+    const selectedTrackIndex = tracks.value.findIndex(
+      playlistTrack => playlistTrack.track.id === track.id,
+    )
+
+    const playBody = isLikedSongs
+      ? {
+          uris: [track.uri],
+        }
+      : {
+          context_uri: playlistUri.value,
+          offset: { position: Math.max(selectedTrackIndex, 0) },
+        }
+
+    await startPlaybackRequest(token, playBody)
+
+    setCurrentTrackFromTrack(track, true)
+    await syncPlayerState()
+  } catch (error) {
+    playerError.value = error?.message || 'Unable to start playback.'
+  } finally {
+    isPreparingPlayback.value = false
   }
-
-  const selectedTrackIndex = tracks.value.findIndex(
-    playlistTrack => playlistTrack.track.id === track.id,
-  )
-
-  // Play the selected track in playlist context so Spotify can continue to the next one
-  const playResponse = await fetch(
-    `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(deviceId)}`,
-    {
-      method: 'PUT',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(
-        isLikedSongs
-          ? {
-              uris: [track.uri],
-            }
-          : {
-              context_uri: playlistUri.value,
-              offset: { position: Math.max(selectedTrackIndex, 0) },
-            },
-      ),
-    },
-  )
-
-  if (!playResponse.ok) {
-    let message = 'Unable to start playback.'
-    try {
-      const data = await playResponse.json()
-      message = data?.error?.message || message
-    } catch {
-      // Ignore JSON parsing errors and keep fallback message.
-    }
-    playerError.value = message
-    return
-  }
-
-  setCurrentTrackFromTrack(track, true)
-  await syncPlayerState()
 }
 
 async function shufflePlay() {
-  if (!playerReady.value || !deviceId || tracks.value.length === 0) return
+  if (isPreparingPlayback.value || tracks.value.length === 0) return
 
   const token = await getValidAccessToken()
   if (!token) {
@@ -352,93 +512,55 @@ async function shufflePlay() {
   }
 
   playerError.value = null
+  isPreparingPlayback.value = true
 
-  await spotifyPlayer.activateElement?.()
+  try {
+    await ensurePlaybackDeviceReady(token)
 
-  const transferResponse = await fetch('https://api.spotify.com/v1/me/player', {
-    method: 'PUT',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ device_ids: [deviceId], play: false }),
-  })
+    await transferPlaybackToWebPlayer(token)
 
-  if (!transferResponse.ok) {
-    let message = 'Unable to activate the Spotify player device.'
-    try {
-      const data = await transferResponse.json()
-      message = data?.error?.message || message
-    } catch {
-      // Ignore JSON parsing errors and keep fallback message.
-    }
-    playerError.value = message
-    return
-  }
-
-  const shuffleResponse = await fetch(
-    `https://api.spotify.com/v1/me/player/shuffle?state=true&device_id=${encodeURIComponent(deviceId)}`,
-    {
-      method: 'PUT',
-      headers: {
-        Authorization: `Bearer ${token}`,
+    const shuffleResponse = await fetch(
+      `https://api.spotify.com/v1/me/player/shuffle?state=true&device_id=${encodeURIComponent(deviceId)}`,
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       },
-    },
-  )
+    )
 
-  if (!shuffleResponse.ok) {
-    let message = 'Unable to enable shuffle mode.'
-    try {
-      const data = await shuffleResponse.json()
-      message = data?.error?.message || message
-    } catch {
-      // Ignore JSON parsing errors and keep fallback message.
+    if (!shuffleResponse.ok) {
+      const error = await extractSpotifyError(
+        shuffleResponse,
+        'Unable to enable shuffle mode.',
+      )
+      throw new Error(error.message)
     }
-    playerError.value = message
-    return
+
+    shuffleEnabled.value = true
+
+    const randomIndex = Math.floor(Math.random() * tracks.value.length)
+    const randomTrack = tracks.value[randomIndex]?.track
+    if (!randomTrack) return
+
+    const playBody = isLikedSongs
+      ? {
+          uris: [randomTrack.uri],
+        }
+      : {
+          context_uri: playlistUri.value,
+          offset: { position: randomIndex },
+        }
+
+    await startPlaybackRequest(token, playBody)
+
+    setCurrentTrackFromTrack(randomTrack, true)
+    await syncPlayerState()
+  } catch (error) {
+    playerError.value = error?.message || 'Unable to start shuffled playback.'
+  } finally {
+    isPreparingPlayback.value = false
   }
-
-  shuffleEnabled.value = true
-
-  const randomIndex = Math.floor(Math.random() * tracks.value.length)
-  const randomTrack = tracks.value[randomIndex]?.track
-  if (!randomTrack) return
-
-  const playResponse = await fetch(
-    `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(deviceId)}`,
-    {
-      method: 'PUT',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(
-        isLikedSongs
-          ? {
-              uris: [randomTrack.uri],
-            }
-          : {
-              context_uri: playlistUri.value,
-              offset: { position: randomIndex },
-            },
-      ),
-    },
-  )
-
-  if (!playResponse.ok) {
-    let message = 'Unable to start shuffled playback.'
-    try {
-      const data = await playResponse.json()
-      message = data?.error?.message || message
-    } catch {
-      // Ignore JSON parsing errors and keep fallback message.
-    }
-    playerError.value = message
-    return
-  }
-
-  setCurrentTrackFromTrack(randomTrack, true)
-  await syncPlayerState()
 }
 
 async function togglePlayback() {
@@ -513,8 +635,7 @@ function isCurrentTrackCard(track) {
 }
 
 onMounted(async () => {
-  await fetchPlaylistTracks()
-  await initPlayer()
+  await Promise.all([fetchPlaylistTracks(), initPlayer()])
 
   window.addEventListener('mousemove', revealNowPlaying)
   window.addEventListener('touchstart', revealNowPlaying, { passive: true })
@@ -538,10 +659,16 @@ onUnmounted(() => {
       <button
         class="shuffle-btn"
         :class="{ active: shuffleEnabled }"
-        :disabled="!playerReady || tracks.length === 0"
+        :disabled="!playerReady || tracks.length === 0 || isPreparingPlayback"
         @click="shufflePlay"
       >
-        {{ shuffleEnabled ? 'Shuffle On' : 'Shuffle Play' }}
+        {{
+          isPreparingPlayback
+            ? 'Preparing…'
+            : shuffleEnabled
+              ? 'Shuffle On'
+              : 'Shuffle Play'
+        }}
       </button>
     </div>
 
