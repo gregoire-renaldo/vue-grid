@@ -3,6 +3,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { getValidAccessToken } from '../spotifyAuth.js'
+import { usePlaylistTracks } from '../composables/usePlaylistTracks.js'
 import {
   extractSpotifyError,
   formatTime,
@@ -13,9 +14,6 @@ import {
 const route = useRoute()
 const playlistId = route.params.id
 const isLikedSongs = playlistId === 'liked-songs'
-const playlistName = ref(isLikedSongs ? 'Liked Songs' : '')
-const playlistUri = ref('')
-const tracks = ref([])
 const currentTrack = ref(null)
 const currentPosition = ref(0)
 const trackDuration = ref(0)
@@ -25,8 +23,22 @@ const showNowPlaying = ref(true)
 const playerReady = ref(false)
 const playerError = ref(null)
 const isPreparingPlayback = ref(false)
-const tracksLoading = ref(false)
 const skeletonItems = Array.from({ length: 16 }, (_, index) => index)
+
+const {
+  playlistName,
+  playlistUri,
+  tracks,
+  tracksLoading,
+  fetchPlaylistTracks,
+} = usePlaylistTracks({
+  playlistId,
+  isLikedSongs,
+  getValidAccessToken,
+  onError: message => {
+    playerError.value = message
+  },
+})
 
 let spotifyPlayer = null
 let deviceId = null
@@ -389,52 +401,6 @@ async function initPlayer() {
 
   const connected = await spotifyPlayer.connect()
   logPlaybackDiagnostic('sdk-connect-result', { connected })
-}
-
-// ── Tracks ────────────────────────────────────────────────────────────────────
-
-async function fetchPlaylistTracks() {
-  tracksLoading.value = true
-  const token = await getValidAccessToken()
-  if (!token) {
-    tracksLoading.value = false
-    return
-  }
-
-  try {
-    if (!isLikedSongs) {
-      const playlistResponse = await fetch(
-        `https://api.spotify.com/v1/playlists/${playlistId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      )
-      const playlistData = await playlistResponse.json()
-      playlistName.value = playlistData.name || 'Playlist'
-      playlistUri.value = playlistData.uri || ''
-    }
-
-    let allTracks = []
-    let endpoint = isLikedSongs
-      ? 'https://api.spotify.com/v1/me/tracks?limit=50'
-      : `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=50`
-
-    // Fetch all pages
-    while (endpoint) {
-      const res = await fetch(endpoint, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      const data = await res.json()
-      allTracks = allTracks.concat(data.items)
-      endpoint = data.next // Fetch next page if it exists
-    }
-
-    tracks.value = allTracks
-  } catch (error) {
-    playerError.value = error?.message || 'Unable to fetch playlist tracks.'
-  } finally {
-    tracksLoading.value = false
-  }
 }
 
 // ── Playback ──────────────────────────────────────────────────────────────────
