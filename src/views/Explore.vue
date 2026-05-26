@@ -1,198 +1,37 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import PlaylistCard from '../components/PlaylistCard.vue'
-import { getValidAccessToken } from '../spotifyAuth.js'
-import {
-  cacheExploreFeaturedPlaylists,
-  cacheExploreSearchResults,
-  isCacheStale,
-  readCachedExploreFeaturedPlaylists,
-  readCachedExploreSearchResults,
-} from '../utils/spotifyCache.js'
+import { useExplorePlaylists } from '../composables/useExplorePlaylists.js'
 
-const featuredPlaylists = ref([])
-const searchResults = ref([])
 const searchQuery = ref('')
-
-const isFeaturedLoading = ref(false)
-const isSearchLoading = ref(false)
-const featuredError = ref('')
-const searchError = ref('')
-
-function normalizePlaylists(items) {
-  return (items || [])
-    .filter(playlist => playlist && playlist.id)
-    .map(playlist => ({
-      ...playlist,
-      name: playlist.name || 'Untitled playlist',
-      images: Array.isArray(playlist.images) ? playlist.images : [],
-      tracks: playlist.tracks || { total: 0 },
-    }))
-}
-
-async function fetchPublicPlaylistFallback(token) {
-  const response = await fetch(
-    'https://api.spotify.com/v1/search?type=playlist&limit=24&q=top%20hits',
-    {
-      headers: { Authorization: `Bearer ${token}` },
-    },
-  )
-
-  if (!response.ok) {
-    throw new Error('Unable to fetch public playlists.')
-  }
-
-  const data = await response.json()
-  return normalizePlaylists(data?.playlists?.items || [])
-}
-
-async function fetchFeaturedPlaylistsFromNetwork(token) {
-  const response = await fetch(
-    'https://api.spotify.com/v1/browse/featured-playlists?limit=24&country=US&locale=en_US',
-    {
-      headers: { Authorization: `Bearer ${token}` },
-    },
-  )
-
-  let items = []
-
-  if (response.ok) {
-    const data = await response.json()
-    items = normalizePlaylists(data?.playlists?.items || [])
-    if (!items.length) {
-      items = await fetchPublicPlaylistFallback(token)
-    }
-  } else if (response.status === 404) {
-    items = await fetchPublicPlaylistFallback(token)
-  } else {
-    throw new Error('Unable to fetch featured playlists.')
-  }
-
-  featuredPlaylists.value = items
-  await cacheExploreFeaturedPlaylists(items)
-
-  return items
-}
-
-async function fetchFeaturedPlaylists(options = {}) {
-  const { forceRefresh = false } = options
-  isFeaturedLoading.value = true
-  featuredError.value = ''
-
-  try {
-    const cachedEntry = await readCachedExploreFeaturedPlaylists()
-    if (cachedEntry?.value?.playlists?.length) {
-      featuredPlaylists.value = normalizePlaylists(cachedEntry.value.playlists)
-    }
-
-    if (!forceRefresh && cachedEntry && !isCacheStale(cachedEntry)) {
-      return cachedEntry.value.playlists
-    }
-
-    const token = await getValidAccessToken()
-    if (!token) {
-      featuredError.value =
-        'Connect your Spotify account to explore public playlists.'
-      return cachedEntry?.value?.playlists || []
-    }
-
-    if (!forceRefresh && cachedEntry?.value?.playlists?.length) {
-      void fetchFeaturedPlaylistsFromNetwork(token).catch(error => {
-        if (!featuredPlaylists.value.length) {
-          featuredError.value =
-            error?.message || 'Unable to fetch public playlists.'
-        }
-      })
-      return cachedEntry.value.playlists
-    }
-
-    return await fetchFeaturedPlaylistsFromNetwork(token)
-  } catch (error) {
-    featuredError.value = error?.message || 'Unable to fetch public playlists.'
-    return []
-  } finally {
-    isFeaturedLoading.value = false
-  }
-}
-
-async function searchPublicPlaylistsFromNetwork(token, query) {
-  const response = await fetch(
-    `https://api.spotify.com/v1/search?type=playlist&limit=24&q=${encodeURIComponent(query)}`,
-    {
-      headers: { Authorization: `Bearer ${token}` },
-    },
-  )
-
-  if (!response.ok) {
-    throw new Error('Unable to search public playlists.')
-  }
-
-  const data = await response.json()
-  const items = normalizePlaylists(data?.playlists?.items || [])
-  searchResults.value = items
-  await cacheExploreSearchResults(query, items)
-
-  return items
-}
-
-async function searchPublicPlaylists() {
-  const trimmedQuery = searchQuery.value.trim()
-  if (!trimmedQuery) {
-    searchResults.value = []
-    searchError.value = ''
-    return
-  }
-
-  isSearchLoading.value = true
-  searchError.value = ''
-
-  try {
-    const cachedEntry = await readCachedExploreSearchResults(trimmedQuery)
-    if (cachedEntry?.value?.playlists) {
-      searchResults.value = normalizePlaylists(cachedEntry.value.playlists)
-    }
-
-    if (cachedEntry && !isCacheStale(cachedEntry)) {
-      return cachedEntry.value.playlists
-    }
-
-    const token = await getValidAccessToken()
-    if (!token) {
-      searchError.value =
-        'Connect your Spotify account to search public playlists.'
-      return cachedEntry?.value?.playlists || []
-    }
-
-    if (cachedEntry?.value?.playlists) {
-      void searchPublicPlaylistsFromNetwork(token, trimmedQuery).catch(
-        error => {
-          if (!searchResults.value.length) {
-            searchError.value =
-              error?.message || 'Unable to search public playlists.'
-          }
-        },
-      )
-      return cachedEntry.value.playlists
-    }
-
-    return await searchPublicPlaylistsFromNetwork(token, trimmedQuery)
-  } catch (error) {
-    searchError.value = error?.message || 'Unable to search public playlists.'
-    return []
-  } finally {
-    isSearchLoading.value = false
-  }
-}
+const {
+  featuredPlaylists,
+  searchResults,
+  browseCategories,
+  selectedCategoryId,
+  categoryPlaylists,
+  isFeaturedLoading,
+  isSearchLoading,
+  isCategoriesLoading,
+  featuredError,
+  searchError,
+  categoriesError,
+  fetchFeaturedPlaylists,
+  searchPublicPlaylists,
+  fetchCategoryMoodGenrePlaylists,
+  selectCategory,
+} = useExplorePlaylists()
 
 function refreshFeaturedPlaylists() {
   fetchFeaturedPlaylists({ forceRefresh: true })
 }
 
 function onSearchSubmit() {
-  searchPublicPlaylists()
+  searchPublicPlaylists(searchQuery.value)
 }
 
 onMounted(fetchFeaturedPlaylists)
+onMounted(fetchCategoryMoodGenrePlaylists)
 </script>
 
 <template>
@@ -261,6 +100,49 @@ onMounted(fetchFeaturedPlaylists)
         />
       </div>
     </section>
+
+    <section class="categories-section">
+      <h2>Category / Mood / Genre Playlists</h2>
+      <p class="section-caption">
+        Surfaced from browse categories and editorial feeds. These can be
+        editorial or partner-curated.
+      </p>
+
+      <p v-if="categoriesError" class="error-text">{{ categoriesError }}</p>
+
+      <div v-else-if="browseCategories.length" class="category-tabs">
+        <button
+          v-for="category in browseCategories"
+          :key="category.id"
+          type="button"
+          class="category-tab-btn"
+          :class="{ active: selectedCategoryId === category.id }"
+          @click="selectCategory(category.id)"
+        >
+          {{ category.name }}
+        </button>
+      </div>
+
+      <p v-if="isCategoriesLoading" class="status-text">
+        Loading category playlists...
+      </p>
+      <p
+        v-else-if="
+          !categoriesError && selectedCategoryId && !categoryPlaylists.length
+        "
+        class="status-text"
+      >
+        No playlists available for this category.
+      </p>
+
+      <div v-else-if="categoryPlaylists.length" class="playlist-grid">
+        <PlaylistCard
+          v-for="playlist in categoryPlaylists"
+          :key="`category-${playlist.id}`"
+          :playlist="playlist"
+        />
+      </div>
+    </section>
   </div>
 </template>
 
@@ -276,8 +158,15 @@ onMounted(fetchFeaturedPlaylists)
 
 .search-section,
 .results-section,
-.featured-section {
+.featured-section,
+.categories-section {
   margin-top: 1rem;
+}
+
+.section-caption {
+  margin-top: 0.35rem;
+  opacity: 0.8;
+  font-size: 0.9rem;
 }
 
 .search-form {
@@ -318,6 +207,28 @@ onMounted(fetchFeaturedPlaylists)
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+}
+
+.category-tabs {
+  margin-top: 0.65rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.category-tab-btn {
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.category-tab-btn.active {
+  border-color: rgba(29, 185, 84, 0.5);
+  background: rgba(29, 185, 84, 0.24);
 }
 
 .playlist-grid {
