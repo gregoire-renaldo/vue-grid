@@ -4,6 +4,10 @@ const props = defineProps({
     type: Number,
     default: 16,
   },
+  loadingText: {
+    type: String,
+    default: 'Loading tracks...',
+  },
 })
 
 const skeletonItems = Array.from(
@@ -16,7 +20,7 @@ const skeletonItems = Array.from(
   <div class="loader-wrap" aria-live="polite">
     <div class="loader-badge">
       <span class="loader-spinner" aria-hidden="true" />
-      Loading tracks...
+      {{ props.loadingText }}
     </div>
 
     <div class="loader-grid">

@@ -20,6 +20,7 @@ const MADE_FOR_YOU_SEARCH_QUERIES = [
 export function usePlaylists({ cooldownMs = 5000 } = {}) {
   const playlists = ref([])
   const currentUserId = ref('')
+  const isPlaylistsLoading = ref(false)
   const isRefreshing = ref(false)
   const {
     isCoolingDown,
@@ -117,29 +118,35 @@ export function usePlaylists({ cooldownMs = 5000 } = {}) {
   }
 
   async function fetchPlaylists() {
-    const cachedEntry = await readCachedPlaylists()
+    isPlaylistsLoading.value = true
 
-    if (cachedEntry?.value?.playlists?.length) {
-      playlists.value = cachedEntry.value.playlists
-    }
-
-    if (cachedEntry && !isCacheStale(cachedEntry)) {
-      return cachedEntry.value.playlists
-    }
-
-    const token = await getValidAccessToken()
-    if (token) {
-      await fetchCurrentUserId(token)
+    try {
+      const cachedEntry = await readCachedPlaylists()
 
       if (cachedEntry?.value?.playlists?.length) {
-        void fetchPlaylistsFromNetwork(token)
+        playlists.value = cachedEntry.value.playlists
+      }
+
+      if (cachedEntry && !isCacheStale(cachedEntry)) {
         return cachedEntry.value.playlists
       }
 
-      return fetchPlaylistsFromNetwork(token)
-    }
+      const token = await getValidAccessToken()
+      if (token) {
+        await fetchCurrentUserId(token)
 
-    return cachedEntry?.value || null
+        if (cachedEntry?.value?.playlists?.length) {
+          void fetchPlaylistsFromNetwork(token)
+          return cachedEntry.value.playlists
+        }
+
+        return fetchPlaylistsFromNetwork(token)
+      }
+
+      return cachedEntry?.value || null
+    } finally {
+      isPlaylistsLoading.value = false
+    }
   }
 
   async function refreshPlaylists() {
@@ -158,6 +165,7 @@ export function usePlaylists({ cooldownMs = 5000 } = {}) {
   return {
     playlists,
     currentUserId,
+    isPlaylistsLoading,
     isRefreshing,
     isCoolingDown,
     refreshLabel,

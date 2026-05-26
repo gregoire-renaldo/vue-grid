@@ -3,6 +3,7 @@
 <script setup>
 import { computed, ref, onMounted } from 'vue'
 import PlaylistCard from '../components/PlaylistCard.vue'
+import TracksLoader from '../components/TracksLoader.vue'
 import { usePlaylists } from '../composables/usePlaylists.js'
 import {
   classifyPlaylistCategories,
@@ -16,6 +17,7 @@ const activeCategory = ref('all')
 const {
   playlists,
   currentUserId,
+  isPlaylistsLoading,
   isRefreshing,
   isCoolingDown,
   refreshLabel,
@@ -155,7 +157,13 @@ onMounted(fetchPlaylists)
       Browse category/mood/genre playlists from the Explore tab.
     </p>
 
-    <div class="playlist-grid">
+    <TracksLoader
+      v-if="isPlaylistsLoading && !playlists.length"
+      :item-count="12"
+      loading-text="Loading playlists..."
+    />
+
+    <div v-else class="playlist-grid">
       <PlaylistCard v-if="showLikedSongsCard" liked-songs />
 
       <PlaylistCard
@@ -167,7 +175,9 @@ onMounted(fetchPlaylists)
     </div>
 
     <p
-      v-if="!playlists.length || !filteredPlaylists.length"
+      v-if="
+        !isPlaylistsLoading && (!playlists.length || !filteredPlaylists.length)
+      "
       class="empty-state"
     >
       {{ emptyStateMessage }}
