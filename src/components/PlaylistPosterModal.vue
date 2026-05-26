@@ -52,10 +52,14 @@ const selectedImageUrls = computed(() => {
   return normalizedCoverUrls.value.slice(0, effectiveCoverCount.value)
 })
 
+const shareMessage = computed(() => {
+  const baseMessage = `Check out this playlist poster: ${props.playlistName}`
+  if (!props.shareUrl) return baseMessage
+  return `${baseMessage} ${props.shareUrl}`
+})
+
 const encodedShareUrl = computed(() => encodeURIComponent(props.shareUrl || ''))
-const encodedShareText = computed(() =>
-  encodeURIComponent(`Check out this playlist poster: ${props.playlistName}`),
-)
+const encodedShareText = computed(() => encodeURIComponent(shareMessage.value))
 const canNativeShare = computed(
   () =>
     typeof navigator !== 'undefined' && typeof navigator.share === 'function',
@@ -81,6 +85,8 @@ const pinterestShareUrl = computed(
 )
 
 const instagramShareUrl = computed(() => 'https://www.instagram.com/')
+const creatorGithubUrl = 'https://github.com/gregoire-renaldo'
+const creatorLinkedinUrl = 'www.linkedin.com/in/gregoire-renaldo-440b791b/'
 
 function closeModal() {
   emit('close')
@@ -304,7 +310,7 @@ async function sharePoster() {
     if (navigator.canShare?.({ files: [file] })) {
       await navigator.share({
         title: props.playlistName,
-        text: `Check out this playlist poster: ${props.playlistName}`,
+        text: shareMessage.value,
         files: [file],
       })
       return
@@ -312,7 +318,7 @@ async function sharePoster() {
 
     await navigator.share({
       title: props.playlistName,
-      text: `Check out this playlist: ${props.playlistName}`,
+      text: shareMessage.value,
       url: props.shareUrl,
     })
   } catch {
@@ -560,6 +566,16 @@ watch(
           </svg>
         </a>
       </div>
+
+      <div class="made-with-love">
+        <span>Made with love</span>
+        <span aria-hidden="true">•</span>
+        <a :href="creatorLinkedinUrl" target="_blank" rel="noreferrer"
+          >LinkedIn</a
+        >
+        <span aria-hidden="true">•</span>
+        <a :href="creatorGithubUrl" target="_blank" rel="noreferrer">GitHub</a>
+      </div>
     </div>
   </div>
 </template>
@@ -766,5 +782,26 @@ watch(
   transform: translateY(-1px);
   border-color: rgba(29, 185, 84, 0.5);
   background: rgba(29, 185, 84, 0.14);
+}
+
+.made-with-love {
+  margin-top: 0.95rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  font-size: 0.8rem;
+  color: rgba(242, 255, 246, 0.78);
+}
+
+.made-with-love a {
+  color: #8ee7b3;
+  text-decoration: none;
+}
+
+.made-with-love a:hover {
+  text-decoration: underline;
 }
 </style>
