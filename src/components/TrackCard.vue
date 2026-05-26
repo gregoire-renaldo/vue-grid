@@ -12,6 +12,10 @@ const props = defineProps({
     type: Boolean,
     required: true,
   },
+  isAnchored: {
+    type: Boolean,
+    default: false,
+  },
   playingAnimation: {
     type: String,
     default: 'dust',
@@ -27,6 +31,7 @@ defineEmits(['select'])
     :class="{
       current: props.isCurrent,
       playing: props.isCurrent && props.isPlaying,
+      anchored: props.isAnchored,
     }"
     @click="$emit('select', props.track)"
   >
@@ -130,6 +135,24 @@ defineEmits(['select'])
 
 .grid-item.playing {
   box-shadow: 0 0 0 3px #1db954;
+}
+
+.grid-item.anchored {
+  box-shadow:
+    0 0 0 3px rgba(255, 220, 120, 0.95),
+    0 0 24px rgba(255, 214, 112, 0.55);
+  animation: anchor-pulse 1.2s ease-in-out 2;
+}
+
+@keyframes anchor-pulse {
+  0%,
+  100% {
+    transform: translateY(-1px) scale(1.01);
+  }
+
+  50% {
+    transform: translateY(-1px) scale(1.04);
+  }
 }
 
 .grid-item.current::after {

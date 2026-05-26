@@ -58,12 +58,38 @@ export function useSpotifyPlayback({
   isLikedSongs,
   tracks,
   playlistUri,
+  playlistName,
   getValidAccessToken,
 }) {
   activePlaylistId = playlistId
   tokenProvider = getValidAccessToken
 
-  function setCurrentTrackFromTrack(track, playing = true) {
+  function resolvePlaylistName() {
+    if (isLikedSongs) return 'Liked Songs'
+
+    if (playlistName && typeof playlistName === 'object' && 'value' in playlistName) {
+      return playlistName.value || ''
+    }
+
+    if (typeof playlistName === 'string') {
+      return playlistName
+    }
+
+    return ''
+  }
+
+  function resolvePlaylistId() {
+    if (isLikedSongs) return 'liked-songs'
+    if (!playlistId || playlistId === 'app-shell') return ''
+    return String(playlistId)
+  }
+
+  function setCurrentTrackFromTrack(
+    track,
+    playing = true,
+    sourcePlaylistName = '',
+    sourcePlaylistId = '',
+  ) {
     if (!track) return
 
     currentTrack.value = {
@@ -73,6 +99,15 @@ export function useSpotifyPlayback({
       name: track.name,
       artists: track.artists || [],
       album: track.album,
+      playlistName:
+        sourcePlaylistName ||
+        currentTrack.value?.playlistName ||
+        resolvePlaylistName(),
+      sourcePlaylistId:
+        sourcePlaylistId ||
+        currentTrack.value?.sourcePlaylistId ||
+        resolvePlaylistId(),
+      focusTrackId: track.id,
     }
 
     isPlaying.value = playing
@@ -111,6 +146,10 @@ export function useSpotifyPlayback({
         name: currentSpotifyTrack.name,
         artists: currentSpotifyTrack.artists,
         album: currentSpotifyTrack.album,
+        playlistName: currentTrack.value?.playlistName || resolvePlaylistName(),
+        sourcePlaylistId:
+          currentTrack.value?.sourcePlaylistId || resolvePlaylistId(),
+        focusTrackId: currentSpotifyTrack.id,
       }
     }
 
@@ -490,7 +529,12 @@ export function useSpotifyPlayback({
 
       await startPlaybackRequest(token, playBody)
 
-      setCurrentTrackFromTrack(track, true)
+      setCurrentTrackFromTrack(
+        track,
+        true,
+        resolvePlaylistName(),
+        resolvePlaylistId(),
+      )
       await syncPlayerState()
     } catch (error) {
       playerError.value = error?.message || 'Unable to start playback.'
@@ -576,7 +620,12 @@ export function useSpotifyPlayback({
 
       await startPlaybackRequest(token, playBody)
 
-      setCurrentTrackFromTrack(randomTrack, true)
+      setCurrentTrackFromTrack(
+        randomTrack,
+        true,
+        resolvePlaylistName(),
+        resolvePlaylistId(),
+      )
       await syncPlayerState()
     } catch (error) {
       playerError.value = error?.message || 'Unable to start shuffled playback.'

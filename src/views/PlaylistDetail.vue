@@ -16,6 +16,7 @@ const isLikedSongs = playlistId === 'liked-songs'
 const gridRef = ref(null)
 const isRefreshing = ref(false)
 const nowPlayingAnimation = inject('nowPlayingAnimation', ref('dust'))
+const anchoredTrackId = ref('')
 const { isCoolingDown, label: refreshLabel, startCooldown } = useCooldown(5000)
 
 const playerError = ref(null)
@@ -53,6 +54,7 @@ const {
   isLikedSongs,
   tracks,
   playlistUri,
+  playlistName,
   getValidAccessToken,
 })
 
@@ -108,6 +110,37 @@ async function scrollToCurrentTrackCard() {
   }
 }
 
+async function scrollToTrackCardById(trackId, options = {}) {
+  const { anchor = false } = options
+  if (!trackId) return
+
+  await nextTick()
+
+  const targetIndex = tracks.value.findIndex(
+    trackItem => trackItem.track?.id === trackId,
+  )
+  if (targetIndex < 0) return
+
+  const gridCards = gridRef.value?.querySelectorAll('.grid-item')
+  const targetCard = gridCards?.[targetIndex]
+  if (!targetCard) return
+
+  targetCard.scrollIntoView({
+    behavior: 'smooth',
+    block: 'center',
+    inline: 'nearest',
+  })
+
+  if (anchor) {
+    anchoredTrackId.value = trackId
+    window.setTimeout(() => {
+      if (anchoredTrackId.value === trackId) {
+        anchoredTrackId.value = ''
+      }
+    }, 2500)
+  }
+}
+
 watch(
   [() => currentTrack.value?.id, isPlaying],
   ([currentTrackId, playing], [previousTrackId]) => {
@@ -119,7 +152,21 @@ watch(
 
 onMounted(async () => {
   await Promise.all([fetchPlaylistTracks(), initPlayer()])
+
+  const focusTrack =
+    typeof route.query?.focusTrack === 'string' ? route.query.focusTrack : ''
+  if (focusTrack) {
+    await scrollToTrackCardById(focusTrack, { anchor: true })
+  }
 })
+
+watch(
+  () => route.query?.focusTrack,
+  focusTrack => {
+    if (typeof focusTrack !== 'string' || !focusTrack) return
+    scrollToTrackCardById(focusTrack, { anchor: true })
+  },
+)
 
 onUnmounted(() => {
   disconnectPlayer()
@@ -163,6 +210,7 @@ onUnmounted(() => {
         :track="track.track"
         :is-current="isCurrentTrackCard(track.track)"
         :is-playing="isPlaying"
+        :is-anchored="anchoredTrackId === track.track.id"
         :playing-animation="nowPlayingAnimation"
         @select="playTrack"
       />
