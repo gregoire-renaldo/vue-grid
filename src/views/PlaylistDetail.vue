@@ -6,6 +6,7 @@ import { getValidAccessToken } from '../spotifyAuth.js'
 import { usePlaylistTracks } from '../composables/usePlaylistTracks.js'
 import { useSpotifyPlayback } from '../composables/useSpotifyPlayback.js'
 import { useCooldown } from '../composables/useCooldown.js'
+import { usePlaylistPoster } from '../composables/usePlaylistPoster.js'
 import PlaylistHeader from '../components/PlaylistHeader.vue'
 import TracksLoader from '../components/TracksLoader.vue'
 import TrackCard from '../components/TrackCard.vue'
@@ -22,7 +23,6 @@ const mobilePlayHotspotEnabled = inject('mobilePlayHotspotEnabled', ref(false))
 const isMobileDevice = inject('isMobileDevice', ref(false))
 const anchoredTrackId = ref('')
 const focusedTrackId = ref('')
-const showPosterModal = ref(false)
 const { isCoolingDown, label: refreshLabel, startCooldown } = useCooldown(5000)
 
 const playerError = ref(null)
@@ -63,6 +63,14 @@ const {
   playlistName,
   getValidAccessToken,
 })
+
+const {
+  showPosterModal,
+  posterCoverUrls,
+  posterShareUrl,
+  openPosterModal,
+  closePosterModal,
+} = usePlaylistPoster({ tracks, route })
 
 async function refreshPlaylist() {
   if (isRefreshing.value || isCoolingDown.value) return
@@ -197,33 +205,6 @@ async function handleTrackSelect(track) {
 
   await playTrack(track)
 }
-
-function openPosterModal() {
-  showPosterModal.value = true
-}
-
-function closePosterModal() {
-  showPosterModal.value = false
-}
-
-const posterCoverUrls = ref([])
-
-watch(
-  tracks,
-  nextTracks => {
-    posterCoverUrls.value = (nextTracks || [])
-      .map(trackItem => trackItem?.track?.album?.images?.[0]?.url || '')
-      .filter(Boolean)
-  },
-  { immediate: true },
-)
-
-const posterShareUrl = ref('')
-
-onMounted(() => {
-  if (typeof window === 'undefined') return
-  posterShareUrl.value = `${window.location.origin}${route.fullPath}`
-})
 
 watch(
   [() => currentTrack.value?.id, isPlaying],
