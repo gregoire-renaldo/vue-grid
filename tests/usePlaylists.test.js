@@ -23,6 +23,45 @@ function mountUsePlaylists() {
   return { state, wrapper }
 }
 
+function createPlaylistsFetchMock({
+  userId = 'user-123',
+  playlists = [],
+  madeForYouSearchResults = [],
+} = {}) {
+  return vi.fn(async url => {
+    const requestUrl = String(url)
+
+    if (requestUrl === 'https://api.spotify.com/v1/me') {
+      return {
+        ok: true,
+        json: async () => ({ id: userId }),
+      }
+    }
+
+    if (requestUrl.startsWith('https://api.spotify.com/v1/me/playlists')) {
+      return {
+        ok: true,
+        json: async () => ({ items: playlists, next: null }),
+      }
+    }
+
+    if (
+      requestUrl.startsWith('https://api.spotify.com/v1/search?type=playlist')
+    ) {
+      return {
+        ok: true,
+        json: async () => ({
+          playlists: {
+            items: madeForYouSearchResults,
+          },
+        }),
+      }
+    }
+
+    return { ok: true, json: async () => ({}) }
+  })
+}
+
 describe('usePlaylists', () => {
   beforeEach(() => {
     __resetSpotifyCacheForTests()
@@ -33,14 +72,11 @@ describe('usePlaylists', () => {
     getValidAccessToken.mockResolvedValue('token')
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          items: [
-            { id: 'b', name: 'Beta', images: [], tracks: { total: 2 } },
-            { id: 'a', name: 'Alpha', images: [], tracks: { total: 1 } },
-          ],
-        }),
+      createPlaylistsFetchMock({
+        playlists: [
+          { id: 'b', name: 'Beta', images: [], tracks: { total: 2 } },
+          { id: 'a', name: 'Alpha', images: [], tracks: { total: 1 } },
+        ],
       }),
     )
 
@@ -49,10 +85,11 @@ describe('usePlaylists', () => {
 
     expect(result).toHaveLength(2)
     expect(state.playlists.value).toHaveLength(2)
+    expect(state.currentUserId.value).toBe('user-123')
     expect(state.playlists.value[0]._fetchedIndex).toBe(0)
     expect(state.playlists.value[1]._fetchedIndex).toBe(1)
     expect(fetch).toHaveBeenCalledWith(
-      'https://api.spotify.com/v1/me/playlists',
+      'https://api.spotify.com/v1/me/playlists?limit=50',
       expect.objectContaining({
         headers: { Authorization: 'Bearer token' },
       }),
@@ -63,10 +100,7 @@ describe('usePlaylists', () => {
 
   it('starts cooldown and refreshes playlists on manual refresh', async () => {
     getValidAccessToken.mockResolvedValue('token')
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ items: [] }),
-    })
+    const fetchMock = createPlaylistsFetchMock({ playlists: [] })
     vi.stubGlobal('fetch', fetchMock)
 
     const { state, wrapper } = mountUsePlaylists()
@@ -74,7 +108,39 @@ describe('usePlaylists', () => {
 
     expect(state.isRefreshing.value).toBe(false)
     expect(state.isCoolingDown.value).toBe(true)
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.spotify.com/v1/me/playlists?limit=50',
+      expect.any(Object),
+    )
+
+    wrapper.unmount()
+  })
+
+  it('merges made-for-you playlists returned by search when missing in /me/playlists', async () => {
+    getValidAccessToken.mockResolvedValue('token')
+    vi.stubGlobal(
+      'fetch',
+      createPlaylistsFetchMock({
+        playlists: [
+          { id: 'owned-1', name: 'My Playlist', tracks: { total: 2 } },
+        ],
+        madeForYouSearchResults: [
+          {
+            id: 'mfy-1',
+            name: 'Daily Mix 1',
+            owner: { id: 'spotify' },
+            tracks: { total: 50 },
+          },
+        ],
+      }),
+    )
+
+    const { state, wrapper } = mountUsePlaylists()
+    await state.fetchPlaylists()
+
+    expect(state.playlists.value.map(playlist => playlist.name)).toContain(
+      'Daily Mix 1',
+    )
 
     wrapper.unmount()
   })

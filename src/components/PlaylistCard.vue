@@ -11,6 +11,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  tags: {
+    type: Array,
+    default: () => [],
+  },
 })
 
 const to = computed(() => {
@@ -50,6 +54,11 @@ const to = computed(() => {
       <div class="playlist-info">
         <h2>{{ props.playlist?.name }}</h2>
         <p>{{ props.playlist?.tracks?.total ?? 0 }} tracks</p>
+        <div v-if="props.tags.length" class="playlist-tags">
+          <span v-for="tag in props.tags" :key="tag" class="playlist-tag">
+            {{ tag }}
+          </span>
+        </div>
       </div>
     </template>
   </RouterLink>
@@ -109,5 +118,21 @@ const to = computed(() => {
   margin: 0.25rem 0 0;
   font-size: 0.85rem;
   opacity: 0.78;
+}
+
+.playlist-tags {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.playlist-tag {
+  font-size: 0.68rem;
+  line-height: 1;
+  padding: 0.22rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  background: rgba(255, 255, 255, 0.08);
 }
 </style>

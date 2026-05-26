@@ -4,11 +4,18 @@
 import { computed, ref, onMounted } from 'vue'
 import PlaylistCard from '../components/PlaylistCard.vue'
 import { usePlaylists } from '../composables/usePlaylists.js'
+import {
+  classifyPlaylistCategories,
+  PLAYLIST_CATEGORIES,
+  resolveCategoryLabel,
+} from '../utils/playlistCategories.js'
 
 const sortMode = ref('alpha-asc')
 const searchQuery = ref('')
+const activeCategory = ref('all')
 const {
   playlists,
+  currentUserId,
   isRefreshing,
   isCoolingDown,
   refreshLabel,
@@ -16,8 +23,27 @@ const {
   refreshPlaylists,
 } = usePlaylists()
 
+const categoryFilters = computed(() => [
+  { id: 'all', label: 'All' },
+  ...PLAYLIST_CATEGORIES,
+])
+
+const playlistsWithTags = computed(() =>
+  playlists.value.map(playlist => {
+    const categoryIds = classifyPlaylistCategories(
+      playlist,
+      currentUserId.value,
+    )
+    return {
+      ...playlist,
+      categoryIds,
+      categoryLabels: categoryIds.map(resolveCategoryLabel),
+    }
+  }),
+)
+
 const sortedPlaylists = computed(() => {
-  const items = [...playlists.value]
+  const items = [...playlistsWithTags.value]
 
   switch (sortMode.value) {
     case 'alpha-desc':
@@ -36,17 +62,31 @@ const normalizedSearchQuery = computed(() =>
   searchQuery.value.trim().toLowerCase(),
 )
 
-const filteredPlaylists = computed(() => {
-  if (!normalizedSearchQuery.value) {
+const categoryFilteredPlaylists = computed(() => {
+  if (activeCategory.value === 'all') {
     return sortedPlaylists.value
   }
 
   return sortedPlaylists.value.filter(playlist =>
+    playlist.categoryIds.includes(activeCategory.value),
+  )
+})
+
+const filteredPlaylists = computed(() => {
+  if (!normalizedSearchQuery.value) {
+    return categoryFilteredPlaylists.value
+  }
+
+  return categoryFilteredPlaylists.value.filter(playlist =>
     (playlist.name || '').toLowerCase().includes(normalizedSearchQuery.value),
   )
 })
 
 const showLikedSongsCard = computed(() => {
+  if (activeCategory.value !== 'all') {
+    return false
+  }
+
   if (!normalizedSearchQuery.value) {
     return true
   }
@@ -55,6 +95,15 @@ const showLikedSongsCard = computed(() => {
 })
 
 const hasSearchQuery = computed(() => normalizedSearchQuery.value.length > 0)
+const hasCategoryFilter = computed(() => activeCategory.value !== 'all')
+
+const emptyStateMessage = computed(() => {
+  if (hasSearchQuery.value || hasCategoryFilter.value) {
+    return 'No playlists match your current filters.'
+  }
+
+  return 'No playlists found.'
+})
 
 onMounted(fetchPlaylists)
 </script>
@@ -89,6 +138,23 @@ onMounted(fetchPlaylists)
       </button>
     </div>
 
+    <div class="category-filters" role="group" aria-label="Filter playlists">
+      <button
+        v-for="category in categoryFilters"
+        :key="category.id"
+        type="button"
+        class="category-filter-btn"
+        :class="{ active: activeCategory === category.id }"
+        @click="activeCategory = category.id"
+      >
+        {{ category.label }}
+      </button>
+    </div>
+
+    <p class="explore-hint">
+      Browse category/mood/genre playlists from the Explore tab.
+    </p>
+
     <div class="playlist-grid">
       <PlaylistCard v-if="showLikedSongsCard" liked-songs />
 
@@ -96,15 +162,15 @@ onMounted(fetchPlaylists)
         v-for="playlist in filteredPlaylists"
         :key="playlist.id"
         :playlist="playlist"
+        :tags="playlist.categoryLabels"
       />
     </div>
 
-    <p v-if="!playlists.length" class="empty-state">No playlists found.</p>
     <p
-      v-else-if="hasSearchQuery && !filteredPlaylists.length"
+      v-if="!playlists.length || !filteredPlaylists.length"
       class="empty-state"
     >
-      No playlists match your search.
+      {{ emptyStateMessage }}
     </p>
   </div>
 </template>
@@ -144,6 +210,34 @@ onMounted(fetchPlaylists)
   align-items: center;
   gap: 0.6rem;
   margin-top: 0.5rem;
+}
+
+.category-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.7rem;
+}
+
+.category-filter-btn {
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  border-radius: 999px;
+  padding: 0.32rem 0.65rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.category-filter-btn.active {
+  background: rgba(29, 185, 84, 0.28);
+  border-color: rgba(29, 185, 84, 0.5);
+}
+
+.explore-hint {
+  margin-top: 0.55rem;
+  font-size: 0.8rem;
+  opacity: 0.75;
 }
 
 .sort-controls label {
