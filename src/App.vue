@@ -1,5 +1,5 @@
 <script setup>
-import { RouterLink, RouterView, useRoute } from 'vue-router'
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { computed, provide, ref, onMounted, onUnmounted } from 'vue'
 import ConfirmModal from './components/ConfirmModal.vue'
 import NowPlayingBar from './components/NowPlayingBar.vue'
@@ -21,12 +21,14 @@ const AVAILABLE_TRACK_ANIMATIONS = ['dust', 'pulse', 'equalizer', 'orbit']
 const profile = ref(null)
 const authError = ref('')
 const showSignOutModal = ref(false)
+const showConnectPromptModal = ref(false)
 const showSettingsMenu = ref(false)
 const darkModeEnabled = ref(false)
 const nowPlayingAnimation = ref('dust')
 const mobilePlayHotspotEnabled = ref(false)
 const isMobileDevice = ref(false)
 const route = useRoute()
+const router = useRouter()
 const playbackTracks = ref([])
 const playbackPlaylistUri = ref('')
 
@@ -77,6 +79,26 @@ function confirmSignOut() {
 
 function cancelSignOut() {
   showSignOutModal.value = false
+}
+
+function onProtectedNavClick(event, targetPath) {
+  event?.preventDefault?.()
+
+  if (profile.value) {
+    router.push(targetPath)
+    return
+  }
+
+  showConnectPromptModal.value = true
+}
+
+async function confirmConnectPrompt() {
+  showConnectPromptModal.value = false
+  await connectToSpotify()
+}
+
+function cancelConnectPrompt() {
+  showConnectPromptModal.value = false
 }
 
 async function loadUserProfile() {
@@ -215,8 +237,16 @@ onUnmounted(() => {
     <div class="wrapper">
       <nav>
         <RouterLink to="/">Home</RouterLink>
-        <RouterLink to="/playlists">Playlists</RouterLink>
-        <RouterLink to="/explore">Explore</RouterLink>
+        <RouterLink to="/playlists" custom v-slot="{ href }">
+          <a :href="href" @click="onProtectedNavClick($event, '/playlists')">
+            Playlists
+          </a>
+        </RouterLink>
+        <RouterLink to="/explore" custom v-slot="{ href }">
+          <a :href="href" @click="onProtectedNavClick($event, '/explore')">
+            Explore
+          </a>
+        </RouterLink>
 
         <button
           v-if="!showHomeButtonPlacement"
@@ -370,6 +400,20 @@ onUnmounted(() => {
       <strong>{{ profile?.display_name }}</strong
       >.
     </p>
+  </ConfirmModal>
+
+  <ConfirmModal
+    :open="showConnectPromptModal"
+    title="Connect to Spotify"
+    confirm-text="Connect"
+    cancel-text="Cancel"
+    size="sm"
+    confirm-variant="primary"
+    cancel-variant="secondary"
+    @cancel="cancelConnectPrompt"
+    @confirm="confirmConnectPrompt"
+  >
+    <p>You need to connect to Spotify to open Playlists and Explore.</p>
   </ConfirmModal>
 </template>
 

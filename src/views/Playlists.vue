@@ -183,7 +183,7 @@ onMounted(fetchPlaylists)
 .title-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 0.75rem;
   flex-wrap: nowrap;
 }
@@ -193,8 +193,8 @@ onMounted(fetchPlaylists)
 }
 
 .playlist-search {
-  width: auto;
-  flex: 1;
+  width: 100%;
+  flex: 0 1 260px;
   min-width: 130px;
   max-width: 260px;
   border: 1px solid rgba(255, 255, 255, 0.25);
