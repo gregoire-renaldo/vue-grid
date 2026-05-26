@@ -4,7 +4,7 @@
   <section class="app-intro">
     <h1>Explore your Spotify collection</h1>
     <p>
-      Vue Grid turns your Spotify playlists into a visual experience with large
+      CoverGrid turns your Spotify playlists into a visual experience with large
       cover cards, a clean playlist view, and a track grid that makes browsing
       music feel fast and simple.
     </p>
