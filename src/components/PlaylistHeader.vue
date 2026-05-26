@@ -22,12 +22,20 @@ const props = defineProps({
   },
 })
 
-defineEmits(['shuffle-play'])
+defineEmits(['shuffle-play', 'open-poster'])
 </script>
 
 <template>
   <div class="playlist-header">
     <h1>{{ props.playlistName }}</h1>
+    <button
+      class="poster-btn"
+      type="button"
+      aria-label="Create and share playlist poster"
+      @click="$emit('open-poster')"
+    >
+      <span aria-hidden="true">&#128247;</span>
+    </button>
     <button
       class="shuffle-btn"
       :class="{ active: props.shuffleEnabled }"
@@ -82,6 +90,29 @@ defineEmits(['shuffle-play'])
     background 0.2s ease,
     border-color 0.2s ease,
     transform 0.2s ease;
+}
+
+.poster-btn {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: #e9fff1;
+  border-radius: 999px;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font-size: 1.05rem;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.poster-btn:hover {
+  background: rgba(29, 185, 84, 0.2);
+  border-color: rgba(29, 185, 84, 0.5);
+  transform: translateY(-1px);
 }
 
 .shuffle-btn.active {
