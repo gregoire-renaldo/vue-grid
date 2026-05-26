@@ -1,9 +1,16 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+const { routerPushMock } = vi.hoisted(() => ({
+  routerPushMock: vi.fn(),
+}))
+
 vi.mock('vue-router', () => ({
   useRoute: () => ({
     params: { id: 'playlist-123' },
+  }),
+  useRouter: () => ({
+    push: routerPushMock,
   }),
 }))
 
@@ -12,6 +19,7 @@ vi.mock('../src/spotifyAuth.js', () => ({
 }))
 
 import PlaylistDetail from '../src/views/PlaylistDetail.vue'
+import TrackCard from '../src/components/TrackCard.vue'
 import { getValidAccessToken } from '../src/spotifyAuth.js'
 import { __resetSpotifyPlaybackSingletonForTests } from '../src/composables/useSpotifyPlayback.js'
 import { __resetSpotifyCacheForTests } from '../src/utils/spotifyCache.js'
@@ -64,6 +72,7 @@ describe('PlaylistDetail view', () => {
     __resetSpotifyPlaybackSingletonForTests()
     __resetSpotifyCacheForTests()
     vi.unstubAllGlobals()
+    routerPushMock.mockReset()
   })
 
   it('shows a loader while tracks are being fetched and then renders the tracks', async () => {
@@ -199,5 +208,217 @@ describe('PlaylistDetail view', () => {
 
     expect(spotifySdk.__mock.togglePlay).toHaveBeenCalledTimes(1)
     expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('navigates to source playlist with focusTrack when current song belongs to another playlist', async () => {
+    getValidAccessToken.mockResolvedValue('token')
+
+    const fetchMock = vi.fn()
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        name: 'Road Trip',
+        uri: 'spotify:playlist:roadtrip',
+      }),
+    })
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        items: [
+          {
+            track: {
+              id: 'track-1',
+              name: 'Song One',
+              uri: 'spotify:track:one',
+              duration_ms: 180000,
+              album: { images: [{ url: 'https://example.com/cover.jpg' }] },
+              artists: [{ name: 'Artist One' }],
+            },
+          },
+        ],
+        next: null,
+      }),
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+    const spotifySdk = createSpotifyPlayerMock()
+    spotifySdk.__mock.getCurrentState.mockReturnValue({
+      paused: true,
+      shuffle: false,
+      position: 0,
+      duration: 180000,
+      track_window: {
+        current_track: {
+          id: 'track-1',
+          uri: 'spotify:track:one',
+          name: 'Song One',
+          artists: [{ name: 'Artist One' }],
+          album: { images: [{ url: 'https://example.com/cover.jpg' }] },
+          linked_from: null,
+        },
+      },
+    })
+    vi.stubGlobal('Spotify', spotifySdk)
+
+    const wrapper = mount(PlaylistDetail)
+    await flushPromises()
+
+    spotifySdk.__mock.listeners.player_state_changed?.({
+      paused: false,
+      shuffle: false,
+      position: 12000,
+      duration: 180000,
+      track_window: {
+        current_track: {
+          id: 'track-1',
+          uri: 'spotify:track:one',
+          name: 'Song One',
+          artists: [{ name: 'Artist One' }],
+          album: { images: [{ url: 'https://example.com/cover.jpg' }] },
+          linked_from: null,
+        },
+      },
+    })
+
+    const sourcePlaylistCurrentTrack = {
+      id: 'track-1',
+      uri: 'spotify:track:one',
+      name: 'Song One',
+      artists: [{ name: 'Artist One' }],
+      album: { images: [{ url: 'https://example.com/cover.jpg' }] },
+      playlistName: 'Focused Playlist',
+      sourcePlaylistId: 'playlist-999',
+      focusTrackId: 'track-1',
+    }
+
+    spotifySdk.__mock.listeners.player_state_changed?.({
+      paused: false,
+      shuffle: false,
+      position: 13000,
+      duration: 180000,
+      track_window: {
+        current_track: {
+          id: sourcePlaylistCurrentTrack.id,
+          uri: sourcePlaylistCurrentTrack.uri,
+          name: sourcePlaylistCurrentTrack.name,
+          artists: sourcePlaylistCurrentTrack.artists,
+          album: sourcePlaylistCurrentTrack.album,
+          linked_from: null,
+        },
+      },
+    })
+
+    // set source playlist metadata after player state sync via public singleton state
+    const playbackModule = await import(
+      '../src/composables/useSpotifyPlayback.js'
+    )
+    playbackModule.useSpotifyPlayback({
+      playlistId: 'playlist-123',
+      isLikedSongs: false,
+      tracks: { value: [] },
+      playlistUri: { value: '' },
+      getValidAccessToken,
+    }).currentTrack.value = sourcePlaylistCurrentTrack
+
+    await wrapper.find('.grid-item').trigger('click')
+    await flushPromises()
+
+    expect(routerPushMock).toHaveBeenCalledWith({
+      name: 'PlaylistDetail',
+      params: { id: 'playlist-999' },
+      query: { focusTrack: 'track-1' },
+    })
+  })
+
+  it('navigates on mobile focus tap for current song from another playlist', async () => {
+    getValidAccessToken.mockResolvedValue('token')
+
+    const fetchMock = vi.fn()
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        name: 'Road Trip',
+        uri: 'spotify:playlist:roadtrip',
+      }),
+    })
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        items: [
+          {
+            track: {
+              id: 'track-1',
+              name: 'Song One',
+              uri: 'spotify:track:one',
+              duration_ms: 180000,
+              album: { images: [{ url: 'https://example.com/cover.jpg' }] },
+              artists: [{ name: 'Artist One' }],
+            },
+          },
+        ],
+        next: null,
+      }),
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+    const spotifySdk = createSpotifyPlayerMock()
+    vi.stubGlobal('Spotify', spotifySdk)
+
+    const wrapper = mount(PlaylistDetail)
+    await flushPromises()
+
+    spotifySdk.__mock.listeners.player_state_changed?.({
+      paused: false,
+      shuffle: false,
+      position: 13000,
+      duration: 180000,
+      track_window: {
+        current_track: {
+          id: 'track-1',
+          uri: 'spotify:track:one',
+          name: 'Song One',
+          artists: [{ name: 'Artist One' }],
+          album: { images: [{ url: 'https://example.com/cover.jpg' }] },
+          linked_from: null,
+        },
+      },
+    })
+
+    const playbackModule = await import(
+      '../src/composables/useSpotifyPlayback.js'
+    )
+    playbackModule.useSpotifyPlayback({
+      playlistId: 'playlist-123',
+      isLikedSongs: false,
+      tracks: { value: [] },
+      playlistUri: { value: '' },
+      getValidAccessToken,
+    }).currentTrack.value = {
+      id: 'track-1',
+      uri: 'spotify:track:one',
+      name: 'Song One',
+      artists: [{ name: 'Artist One' }],
+      album: { images: [{ url: 'https://example.com/cover.jpg' }] },
+      playlistName: 'Source Playlist',
+      sourcePlaylistId: 'playlist-999',
+      focusTrackId: 'track-1',
+    }
+
+    wrapper.findComponent(TrackCard).vm.$emit('focus', {
+      id: 'track-1',
+      uri: 'spotify:track:one',
+      name: 'Song One',
+      artists: [{ name: 'Artist One' }],
+      album: { images: [{ url: 'https://example.com/cover.jpg' }] },
+    })
+    await flushPromises()
+
+    expect(routerPushMock).toHaveBeenCalledWith({
+      name: 'PlaylistDetail',
+      params: { id: 'playlist-999' },
+      query: { focusTrack: 'track-1' },
+    })
   })
 })

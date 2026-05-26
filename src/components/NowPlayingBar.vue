@@ -55,22 +55,21 @@ const playlistLink = computed(() => {
       alt="Album cover"
       class="now-playing-cover"
     />
-    <div class="now-playing-info">
+    <RouterLink v-if="playlistLink" :to="playlistLink" class="now-playing-info">
       <span class="now-playing-title">{{ props.currentTrack.name }}</span>
       <span class="now-playing-artist">
         {{ props.currentTrack.artists.map(artist => artist.name).join(', ') }}
       </span>
-      <RouterLink
-        v-if="props.currentTrack.playlistName && playlistLink"
-        :to="playlistLink"
-        class="now-playing-source now-playing-source-link"
-      >
+      <span v-if="props.currentTrack.playlistName" class="now-playing-source">
         From: {{ props.currentTrack.playlistName }}
-      </RouterLink>
-      <span
-        v-else-if="props.currentTrack.playlistName"
-        class="now-playing-source"
-      >
+      </span>
+    </RouterLink>
+    <div v-else class="now-playing-info">
+      <span class="now-playing-title">{{ props.currentTrack.name }}</span>
+      <span class="now-playing-artist">
+        {{ props.currentTrack.artists.map(artist => artist.name).join(', ') }}
+      </span>
+      <span v-if="props.currentTrack.playlistName" class="now-playing-source">
         From: {{ props.currentTrack.playlistName }}
       </span>
     </div>
@@ -191,12 +190,13 @@ const playlistLink = computed(() => {
   text-overflow: ellipsis;
 }
 
-.now-playing-source-link {
+a.now-playing-info {
   text-decoration: none;
+  color: inherit;
 }
 
-.now-playing-source-link:hover {
-  text-decoration: underline;
+a.now-playing-info:active {
+  opacity: 0.75;
 }
 
 .seek-row {

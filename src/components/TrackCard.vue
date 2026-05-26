@@ -24,23 +24,52 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  useFocusInteraction: {
+    type: Boolean,
+    default: false,
+  },
+  enableMobilePlayHotspot: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits(['select', 'focus'])
 
-function isMobileEnvironment() {
-  if (
-    typeof window === 'undefined' ||
-    typeof window.matchMedia !== 'function'
-  ) {
+function isTapInPlayHotspot(event) {
+  const target = event?.currentTarget
+  if (!target || typeof target.getBoundingClientRect !== 'function') {
     return false
   }
 
-  return window.matchMedia('(hover: none), (pointer: coarse)').matches
+  const rect = target.getBoundingClientRect()
+  if (!rect.width || !rect.height) return false
+
+  const tapX = Number(event?.clientX) - rect.left
+  const tapY = Number(event?.clientY) - rect.top
+
+  const hotspotWidth = Math.min(rect.width * 0.42, 64)
+  const hotspotHeight = Math.min(rect.height * 0.42, 64)
+  const hotspotCenterX = rect.width / 2
+  const hotspotCenterY = rect.height * 0.38
+
+  return (
+    Math.abs(tapX - hotspotCenterX) <= hotspotWidth / 2 &&
+    Math.abs(tapY - hotspotCenterY) <= hotspotHeight / 2
+  )
 }
 
-function onCardClick() {
-  if (isMobileEnvironment()) {
+function onCardClick(event) {
+  if (event?.pointerType === 'touch' || props.useFocusInteraction) {
+    if (
+      props.enableMobilePlayHotspot &&
+      !props.isMobileFocused &&
+      isTapInPlayHotspot(event)
+    ) {
+      emit('select', props.track)
+      return
+    }
+
     emit('focus', props.track)
     return
   }
