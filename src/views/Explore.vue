@@ -327,6 +327,13 @@ onMounted(fetchFeaturedPlaylists)
   margin-top: 0.8rem;
 }
 
+@media (max-width: 420px) {
+  .playlist-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+}
+
 .status-text {
   margin-top: 0.7rem;
   opacity: 0.8;

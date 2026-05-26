@@ -169,6 +169,13 @@ onMounted(fetchPlaylists)
   margin-top: 1rem;
 }
 
+@media (max-width: 420px) {
+  .playlist-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+}
+
 .empty-state {
   margin-top: 1rem;
   opacity: 0.75;
