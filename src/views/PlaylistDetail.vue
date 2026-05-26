@@ -9,6 +9,7 @@ import { useCooldown } from '../composables/useCooldown.js'
 import PlaylistHeader from '../components/PlaylistHeader.vue'
 import TracksLoader from '../components/TracksLoader.vue'
 import TrackCard from '../components/TrackCard.vue'
+import PlaylistPosterModal from '../components/PlaylistPosterModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -21,6 +22,7 @@ const mobilePlayHotspotEnabled = inject('mobilePlayHotspotEnabled', ref(false))
 const isMobileDevice = inject('isMobileDevice', ref(false))
 const anchoredTrackId = ref('')
 const focusedTrackId = ref('')
+const showPosterModal = ref(false)
 const { isCoolingDown, label: refreshLabel, startCooldown } = useCooldown(5000)
 
 const playerError = ref(null)
@@ -196,6 +198,33 @@ async function handleTrackSelect(track) {
   await playTrack(track)
 }
 
+function openPosterModal() {
+  showPosterModal.value = true
+}
+
+function closePosterModal() {
+  showPosterModal.value = false
+}
+
+const posterCoverUrls = ref([])
+
+watch(
+  tracks,
+  nextTracks => {
+    posterCoverUrls.value = (nextTracks || [])
+      .map(trackItem => trackItem?.track?.album?.images?.[0]?.url || '')
+      .filter(Boolean)
+  },
+  { immediate: true },
+)
+
+const posterShareUrl = ref('')
+
+onMounted(() => {
+  if (typeof window === 'undefined') return
+  posterShareUrl.value = `${window.location.origin}${route.fullPath}`
+})
+
 watch(
   [() => currentTrack.value?.id, isPlaying],
   ([currentTrackId, playing], [previousTrackId]) => {
@@ -238,6 +267,7 @@ onUnmounted(() => {
       :player-ready="playerReady"
       :track-count="tracks.length"
       @shuffle-play="shufflePlay"
+      @open-poster="openPosterModal"
     />
 
     <div class="page-actions">
@@ -275,6 +305,14 @@ onUnmounted(() => {
         @focus="handleTrackFocus"
       />
     </div>
+
+    <PlaylistPosterModal
+      :open="showPosterModal"
+      :playlist-name="playlistName"
+      :cover-urls="posterCoverUrls"
+      :share-url="posterShareUrl"
+      @close="closePosterModal"
+    />
   </div>
 </template>
 
