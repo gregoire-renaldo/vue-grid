@@ -69,7 +69,7 @@ export async function redirectToAuthCodeFlow() {
     response_type: 'code',
     redirect_uri: redirectUri,
     scope:
-      'user-read-private user-read-email streaming user-library-read user-modify-playback-state user-read-playback-state',
+      'user-read-private user-read-email streaming user-library-read user-modify-playback-state user-read-playback-state playlist-read-private playlist-read-collaborative',
     code_challenge_method: 'S256',
     code_challenge: challenge,
   })

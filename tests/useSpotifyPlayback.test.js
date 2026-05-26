@@ -257,4 +257,104 @@ describe('useSpotifyPlayback', () => {
     playback.disconnectPlayer({ force: true })
     expect(sdk.__mock.disconnect).toHaveBeenCalledTimes(1)
   })
+
+  it('auto-skips to the next track when Spotify rejects a restricted track', async () => {
+    const getValidAccessToken = vi.fn().mockResolvedValue('token')
+    const blockedTrack = {
+      id: 'track-1',
+      uri: 'spotify:track:blocked',
+      name: 'Blocked Song',
+      artists: [{ name: 'Artist One' }],
+      album: { images: [{ url: 'https://example.com/cover.jpg' }] },
+      duration_ms: 180000,
+    }
+    const playableTrack = {
+      id: 'track-2',
+      uri: 'spotify:track:playable',
+      name: 'Playable Song',
+      artists: [{ name: 'Artist Two' }],
+      album: { images: [{ url: 'https://example.com/cover2.jpg' }] },
+      duration_ms: 200000,
+    }
+
+    const tracks = ref([{ track: blockedTrack }, { track: playableTrack }])
+    const playlistUri = ref('spotify:playlist:roadtrip')
+
+    const sdk = createSpotifySdkMock()
+    vi.stubGlobal('Spotify', sdk)
+
+    const fetchMock = vi.fn(async (url, options) => {
+      const requestUrl = String(url)
+
+      if (requestUrl.includes('/me/player/devices')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            devices: [{ id: 'device-123', is_active: true }],
+          }),
+        }
+      }
+
+      if (requestUrl === 'https://api.spotify.com/v1/me/player') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({}),
+        }
+      }
+
+      if (requestUrl.includes('/me/player/play?device_id=device-123')) {
+        const body = JSON.parse(options?.body || '{}')
+
+        if (body.offset?.position === 0) {
+          return {
+            ok: false,
+            status: 403,
+            json: async () => ({
+              error: {
+                status: 403,
+                message: 'Player command failed: Restriction violated',
+                reason: 'UNKNOWN',
+              },
+            }),
+          }
+        }
+
+        return {
+          ok: true,
+          status: 204,
+          json: async () => ({}),
+        }
+      }
+
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({}),
+      }
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const playback = useSpotifyPlayback({
+      playlistId: 'playlist-123',
+      isLikedSongs: false,
+      tracks,
+      playlistUri,
+      getValidAccessToken,
+    })
+
+    await playback.initPlayer()
+    await new Promise(resolve => setTimeout(resolve, 0))
+    await playback.playTrack(blockedTrack)
+
+    const playCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url).includes('/me/player/play?device_id=device-123'),
+    )
+
+    expect(playCalls).toHaveLength(2)
+    expect(playback.currentTrack.value?.id).toBe('track-2')
+    expect(playback.playerError.value).toBeNull()
+  })
 })

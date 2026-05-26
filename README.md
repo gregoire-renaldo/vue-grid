@@ -1,6 +1,8 @@
 # Vue Grid
 
-Vue Grid is a Vue 3 Spotify companion app with a visual, cover-first experience for listening and discovery.
+coverGrid is a Vue 3 Spotify companion app with a visual, cover-first experience for listening and discovery.
+
+production demo: https://mosaic-covers.vercel.app/
 
 ## Features
 

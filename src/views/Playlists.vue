@@ -2,22 +2,48 @@
 
 <script setup>
 import { computed, ref, onMounted } from 'vue'
-import { getValidAccessToken } from '../spotifyAuth.js'
 import PlaylistCard from '../components/PlaylistCard.vue'
-import { useCooldown } from '../composables/useCooldown.js'
+import { usePlaylists } from '../composables/usePlaylists.js'
 import {
-  cachePlaylists,
-  isCacheStale,
-  readCachedPlaylists,
-} from '../utils/spotifyCache.js'
+  classifyPlaylistCategories,
+  PLAYLIST_CATEGORIES,
+  resolveCategoryLabel,
+} from '../utils/playlistCategories.js'
 
-const playlists = ref([])
 const sortMode = ref('alpha-asc')
-const isRefreshing = ref(false)
-const { isCoolingDown, label: refreshLabel, startCooldown } = useCooldown(5000)
+const searchQuery = ref('')
+const activeCategory = ref('all')
+const {
+  playlists,
+  currentUserId,
+  isRefreshing,
+  isCoolingDown,
+  refreshLabel,
+  fetchPlaylists,
+  refreshPlaylists,
+} = usePlaylists()
+
+const categoryFilters = computed(() => [
+  { id: 'all', label: 'All' },
+  ...PLAYLIST_CATEGORIES,
+])
+
+const playlistsWithTags = computed(() =>
+  playlists.value.map(playlist => {
+    const categoryIds = classifyPlaylistCategories(
+      playlist,
+      currentUserId.value,
+    )
+    return {
+      ...playlist,
+      categoryIds,
+      categoryLabels: categoryIds.map(resolveCategoryLabel),
+    }
+  }),
+)
 
 const sortedPlaylists = computed(() => {
-  const items = [...playlists.value]
+  const items = [...playlistsWithTags.value]
 
   switch (sortMode.value) {
     case 'alpha-desc':
@@ -32,65 +58,68 @@ const sortedPlaylists = computed(() => {
   }
 })
 
-async function fetchPlaylistsFromNetwork(token) {
-  const response = await fetch('https://api.spotify.com/v1/me/playlists', {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  const data = await response.json()
-  const nextPlaylists = (data.items || []).map((playlist, index) => ({
-    ...playlist,
-    _fetchedIndex: index,
-  }))
+const normalizedSearchQuery = computed(() =>
+  searchQuery.value.trim().toLowerCase(),
+)
 
-  playlists.value = nextPlaylists
-  await cachePlaylists(nextPlaylists)
-
-  return nextPlaylists
-}
-
-async function fetchPlaylists() {
-  const cachedEntry = await readCachedPlaylists()
-
-  if (cachedEntry?.value?.playlists?.length) {
-    playlists.value = cachedEntry.value.playlists
+const categoryFilteredPlaylists = computed(() => {
+  if (activeCategory.value === 'all') {
+    return sortedPlaylists.value
   }
 
-  if (cachedEntry && !isCacheStale(cachedEntry)) {
-    return cachedEntry.value.playlists
+  return sortedPlaylists.value.filter(playlist =>
+    playlist.categoryIds.includes(activeCategory.value),
+  )
+})
+
+const filteredPlaylists = computed(() => {
+  if (!normalizedSearchQuery.value) {
+    return categoryFilteredPlaylists.value
   }
 
-  const token = await getValidAccessToken()
-  if (token) {
-    if (cachedEntry?.value?.playlists?.length) {
-      void fetchPlaylistsFromNetwork(token)
-      return cachedEntry.value.playlists
-    }
+  return categoryFilteredPlaylists.value.filter(playlist =>
+    (playlist.name || '').toLowerCase().includes(normalizedSearchQuery.value),
+  )
+})
 
-    return fetchPlaylistsFromNetwork(token)
+const showLikedSongsCard = computed(() => {
+  if (activeCategory.value !== 'all') {
+    return false
   }
 
-  return cachedEntry?.value || null
-}
-
-async function refreshPlaylists() {
-  if (isRefreshing.value || isCoolingDown.value) return
-
-  isRefreshing.value = true
-  startCooldown()
-
-  try {
-    await fetchPlaylists()
-  } finally {
-    isRefreshing.value = false
+  if (!normalizedSearchQuery.value) {
+    return true
   }
-}
+
+  return 'liked songs'.includes(normalizedSearchQuery.value)
+})
+
+const hasSearchQuery = computed(() => normalizedSearchQuery.value.length > 0)
+const hasCategoryFilter = computed(() => activeCategory.value !== 'all')
+
+const emptyStateMessage = computed(() => {
+  if (hasSearchQuery.value || hasCategoryFilter.value) {
+    return 'No playlists match your current filters.'
+  }
+
+  return 'No playlists found.'
+})
 
 onMounted(fetchPlaylists)
 </script>
 
 <template>
   <div class="playlists">
-    <h1>Your Playlists</h1>
+    <div class="title-row">
+      <h1>Your Playlists</h1>
+      <input
+        v-model="searchQuery"
+        type="search"
+        class="playlist-search"
+        placeholder="Search by title"
+        aria-label="Search playlists by title"
+      />
+    </div>
 
     <div class="sort-controls">
       <label for="playlist-sort">Sort by</label>
@@ -109,17 +138,40 @@ onMounted(fetchPlaylists)
       </button>
     </div>
 
+    <div class="category-filters" role="group" aria-label="Filter playlists">
+      <button
+        v-for="category in categoryFilters"
+        :key="category.id"
+        type="button"
+        class="category-filter-btn"
+        :class="{ active: activeCategory === category.id }"
+        @click="activeCategory = category.id"
+      >
+        {{ category.label }}
+      </button>
+    </div>
+
+    <p class="explore-hint">
+      Browse category/mood/genre playlists from the Explore tab.
+    </p>
+
     <div class="playlist-grid">
-      <PlaylistCard liked-songs />
+      <PlaylistCard v-if="showLikedSongsCard" liked-songs />
 
       <PlaylistCard
-        v-for="playlist in sortedPlaylists"
+        v-for="playlist in filteredPlaylists"
         :key="playlist.id"
         :playlist="playlist"
+        :tags="playlist.categoryLabels"
       />
     </div>
 
-    <p v-if="!playlists.length" class="empty-state">No playlists found.</p>
+    <p
+      v-if="!playlists.length || !filteredPlaylists.length"
+      class="empty-state"
+    >
+      {{ emptyStateMessage }}
+    </p>
   </div>
 </template>
 
@@ -128,11 +180,64 @@ onMounted(fetchPlaylists)
   width: 100%;
 }
 
+.title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: nowrap;
+}
+
+.title-row h1 {
+  white-space: nowrap;
+}
+
+.playlist-search {
+  width: auto;
+  flex: 1;
+  min-width: 130px;
+  max-width: 260px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  border-radius: 8px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.88rem;
+}
+
 .sort-controls {
   display: flex;
   align-items: center;
   gap: 0.6rem;
   margin-top: 0.5rem;
+}
+
+.category-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.7rem;
+}
+
+.category-filter-btn {
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  border-radius: 999px;
+  padding: 0.32rem 0.65rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.category-filter-btn.active {
+  background: rgba(29, 185, 84, 0.28);
+  border-color: rgba(29, 185, 84, 0.5);
+}
+
+.explore-hint {
+  margin-top: 0.55rem;
+  font-size: 0.8rem;
+  opacity: 0.75;
 }
 
 .sort-controls label {
@@ -167,6 +272,13 @@ onMounted(fetchPlaylists)
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 12px;
   margin-top: 1rem;
+}
+
+@media (max-width: 420px) {
+  .playlist-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
 }
 
 .empty-state {
