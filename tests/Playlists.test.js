@@ -111,4 +111,43 @@ describe('Playlists view', () => {
 
     expect(playlistTitles).toEqual(['Beta', 'Alpha'])
   })
+
+  it('filters playlists as the user types in the title search', async () => {
+    getValidAccessToken.mockResolvedValue('token')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          items: [
+            {
+              id: '2',
+              name: 'Beta Mix',
+              images: [],
+              tracks: { total: 2 },
+            },
+            {
+              id: '1',
+              name: 'Alpha Vibes',
+              images: [],
+              tracks: { total: 1 },
+            },
+          ],
+        }),
+      }),
+    )
+
+    const wrapper = mountPlaylists()
+    await flushPromises()
+
+    await wrapper.find('.playlist-search').setValue('alpha')
+
+    const playlistTitles = wrapper
+      .findAll('.playlist-info h2')
+      .map(node => node.text())
+
+    expect(playlistTitles).toContain('Alpha Vibes')
+    expect(playlistTitles).not.toContain('Beta Mix')
+    expect(playlistTitles).not.toContain('Liked Songs')
+  })
 })

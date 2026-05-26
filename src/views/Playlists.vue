@@ -13,6 +13,7 @@ import {
 
 const playlists = ref([])
 const sortMode = ref('alpha-asc')
+const searchQuery = ref('')
 const isRefreshing = ref(false)
 const { isCoolingDown, label: refreshLabel, startCooldown } = useCooldown(5000)
 
@@ -31,6 +32,30 @@ const sortedPlaylists = computed(() => {
       return items.sort((a, b) => a.name.localeCompare(b.name))
   }
 })
+
+const normalizedSearchQuery = computed(() =>
+  searchQuery.value.trim().toLowerCase(),
+)
+
+const filteredPlaylists = computed(() => {
+  if (!normalizedSearchQuery.value) {
+    return sortedPlaylists.value
+  }
+
+  return sortedPlaylists.value.filter(playlist =>
+    (playlist.name || '').toLowerCase().includes(normalizedSearchQuery.value),
+  )
+})
+
+const showLikedSongsCard = computed(() => {
+  if (!normalizedSearchQuery.value) {
+    return true
+  }
+
+  return 'liked songs'.includes(normalizedSearchQuery.value)
+})
+
+const hasSearchQuery = computed(() => normalizedSearchQuery.value.length > 0)
 
 async function fetchPlaylistsFromNetwork(token) {
   const response = await fetch('https://api.spotify.com/v1/me/playlists', {
@@ -90,7 +115,16 @@ onMounted(fetchPlaylists)
 
 <template>
   <div class="playlists">
-    <h1>Your Playlists</h1>
+    <div class="title-row">
+      <h1>Your Playlists</h1>
+      <input
+        v-model="searchQuery"
+        type="search"
+        class="playlist-search"
+        placeholder="Search by title"
+        aria-label="Search playlists by title"
+      />
+    </div>
 
     <div class="sort-controls">
       <label for="playlist-sort">Sort by</label>
@@ -110,22 +144,53 @@ onMounted(fetchPlaylists)
     </div>
 
     <div class="playlist-grid">
-      <PlaylistCard liked-songs />
+      <PlaylistCard v-if="showLikedSongsCard" liked-songs />
 
       <PlaylistCard
-        v-for="playlist in sortedPlaylists"
+        v-for="playlist in filteredPlaylists"
         :key="playlist.id"
         :playlist="playlist"
       />
     </div>
 
     <p v-if="!playlists.length" class="empty-state">No playlists found.</p>
+    <p
+      v-else-if="hasSearchQuery && !filteredPlaylists.length"
+      class="empty-state"
+    >
+      No playlists match your search.
+    </p>
   </div>
 </template>
 
 <style scoped>
 .playlists {
   width: 100%;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: nowrap;
+}
+
+.title-row h1 {
+  white-space: nowrap;
+}
+
+.playlist-search {
+  width: auto;
+  flex: 1;
+  min-width: 130px;
+  max-width: 260px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  border-radius: 8px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.88rem;
 }
 
 .sort-controls {
