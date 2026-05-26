@@ -4,14 +4,25 @@ import { describe, expect, it } from 'vitest'
 import NowPlayingBar from '../src/components/NowPlayingBar.vue'
 
 const currentTrack = {
+  id: 'track-1',
   name: 'Song One',
   artists: [{ name: 'Artist One' }],
   album: { images: [{ url: 'https://example.com/cover.jpg' }] },
+  playlistName: 'Road Trip',
+  sourcePlaylistId: 'playlist-123',
+  focusTrackId: 'track-1',
 }
 
 describe('NowPlayingBar', () => {
   it('renders now playing metadata and formatted timer', () => {
     const wrapper = mount(NowPlayingBar, {
+      global: {
+        stubs: {
+          RouterLink: {
+            template: '<a><slot /></a>',
+          },
+        },
+      },
       props: {
         currentTrack,
         currentPosition: 65_000,
@@ -23,12 +34,20 @@ describe('NowPlayingBar', () => {
 
     expect(wrapper.text()).toContain('Song One')
     expect(wrapper.text()).toContain('Artist One')
+    expect(wrapper.text()).toContain('From: Road Trip')
     expect(wrapper.text()).toContain('1:05')
     expect(wrapper.text()).toContain('3:00')
   })
 
   it('emits playback control events', async () => {
     const wrapper = mount(NowPlayingBar, {
+      global: {
+        stubs: {
+          RouterLink: {
+            template: '<a><slot /></a>',
+          },
+        },
+      },
       props: {
         currentTrack,
         currentPosition: 0,

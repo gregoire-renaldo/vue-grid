@@ -1,4 +1,6 @@
 <script setup>
+import { computed } from 'vue'
+import { RouterLink } from 'vue-router'
 import { formatTime } from '../utils/playlistDetailHelpers.js'
 
 const props = defineProps({
@@ -31,6 +33,19 @@ defineEmits([
   'stop-playback',
   'seek-track',
 ])
+
+const playlistLink = computed(() => {
+  const playlistId = props.currentTrack?.sourcePlaylistId
+  if (!playlistId) return null
+
+  return {
+    name: 'PlaylistDetail',
+    params: { id: playlistId },
+    query: props.currentTrack?.focusTrackId
+      ? { focusTrack: props.currentTrack.focusTrackId }
+      : {},
+  }
+})
 </script>
 
 <template>
@@ -44,6 +59,19 @@ defineEmits([
       <span class="now-playing-title">{{ props.currentTrack.name }}</span>
       <span class="now-playing-artist">
         {{ props.currentTrack.artists.map(artist => artist.name).join(', ') }}
+      </span>
+      <RouterLink
+        v-if="props.currentTrack.playlistName && playlistLink"
+        :to="playlistLink"
+        class="now-playing-source now-playing-source-link"
+      >
+        From: {{ props.currentTrack.playlistName }}
+      </RouterLink>
+      <span
+        v-else-if="props.currentTrack.playlistName"
+        class="now-playing-source"
+      >
+        From: {{ props.currentTrack.playlistName }}
       </span>
     </div>
 
@@ -132,6 +160,7 @@ defineEmits([
 
 .now-playing-info {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -152,6 +181,22 @@ defineEmits([
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.now-playing-source {
+  font-size: 0.72rem;
+  color: #8ee7b3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.now-playing-source-link {
+  text-decoration: none;
+}
+
+.now-playing-source-link:hover {
+  text-decoration: underline;
 }
 
 .seek-row {
@@ -196,5 +241,47 @@ defineEmits([
 .stop-btn {
   font-size: 1rem;
   color: #b3b3b3;
+}
+
+@media (max-width: 768px) {
+  .now-playing {
+    gap: 0.5rem;
+    padding: 0 0.75rem;
+  }
+
+  .now-playing-cover {
+    width: 42px;
+    height: 42px;
+  }
+
+  .now-playing-controls {
+    flex: 0 0 auto;
+    gap: 0.25rem;
+  }
+
+  .seek-row {
+    display: none;
+  }
+
+  .stop-btn {
+    display: none;
+  }
+
+  .now-playing-btn {
+    font-size: 1.2rem;
+    padding: 0.2rem 0.3rem;
+  }
+
+  .now-playing-title {
+    font-size: 0.86rem;
+  }
+
+  .now-playing-artist {
+    display: none;
+  }
+
+  .now-playing-source {
+    font-size: 0.76rem;
+  }
 }
 </style>

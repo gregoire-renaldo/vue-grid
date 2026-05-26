@@ -183,10 +183,88 @@ onUnmounted(() => {
         >
           {{
             profile
-              ? `Connected as ${profile.display_name}`
+              ? `Connected`
               : 'Connect to Spotify'
           }}
         </button>
+
+        <div class="settings-anchor">
+          <button
+            class="settings-wheel"
+            aria-label="Open settings"
+            @click="toggleSettingsMenu"
+          >
+            ⚙
+          </button>
+
+          <div v-if="showSettingsMenu" class="settings-menu" role="menu">
+            <div class="settings-menu-header">Display</div>
+            <label class="settings-item">
+              <span>Dark mode</span>
+              <input
+                type="checkbox"
+                :checked="darkModeEnabled"
+                @change="onDarkModeChange"
+              />
+            </label>
+
+            <div class="settings-section-title">Now Playing animation</div>
+            <div
+              class="settings-options"
+              role="radiogroup"
+              aria-label="Now playing animation"
+            >
+              <label class="settings-item settings-item-radio">
+                <span>Dust</span>
+                <input
+                  type="radio"
+                  name="track-animation"
+                  value="dust"
+                  :checked="nowPlayingAnimation === 'dust'"
+                  @change="setTrackAnimation('dust')"
+                />
+              </label>
+              <label class="settings-item settings-item-radio">
+                <span>Pulse Rings</span>
+                <input
+                  type="radio"
+                  name="track-animation"
+                  value="pulse"
+                  :checked="nowPlayingAnimation === 'pulse'"
+                  @change="setTrackAnimation('pulse')"
+                />
+              </label>
+              <label class="settings-item settings-item-radio">
+                <span>Equalizer Bars</span>
+                <input
+                  type="radio"
+                  name="track-animation"
+                  value="equalizer"
+                  :checked="nowPlayingAnimation === 'equalizer'"
+                  @change="setTrackAnimation('equalizer')"
+                />
+              </label>
+              <label class="settings-item settings-item-radio">
+                <span>Orbit Glow</span>
+                <input
+                  type="radio"
+                  name="track-animation"
+                  value="orbit"
+                  :checked="nowPlayingAnimation === 'orbit'"
+                  @change="setTrackAnimation('orbit')"
+                />
+              </label>
+            </div>
+
+            <button
+              class="settings-close"
+              type="button"
+              @click="closeSettingsMenu"
+            >
+              Close
+            </button>
+          </div>
+        </div>
       </nav>
       <button
         v-if="showHomeButtonPlacement"
@@ -242,80 +320,6 @@ onUnmounted(() => {
       >.
     </p>
   </ConfirmModal>
-
-  <div class="settings-anchor">
-    <button
-      class="settings-wheel"
-      aria-label="Open settings"
-      @click="toggleSettingsMenu"
-    >
-      ⚙
-    </button>
-
-    <div v-if="showSettingsMenu" class="settings-menu" role="menu">
-      <div class="settings-menu-header">Display</div>
-      <label class="settings-item">
-        <span>Dark mode</span>
-        <input
-          type="checkbox"
-          :checked="darkModeEnabled"
-          @change="onDarkModeChange"
-        />
-      </label>
-
-      <div class="settings-section-title">Now Playing animation</div>
-      <div
-        class="settings-options"
-        role="radiogroup"
-        aria-label="Now playing animation"
-      >
-        <label class="settings-item settings-item-radio">
-          <span>Dust</span>
-          <input
-            type="radio"
-            name="track-animation"
-            value="dust"
-            :checked="nowPlayingAnimation === 'dust'"
-            @change="setTrackAnimation('dust')"
-          />
-        </label>
-        <label class="settings-item settings-item-radio">
-          <span>Pulse Rings</span>
-          <input
-            type="radio"
-            name="track-animation"
-            value="pulse"
-            :checked="nowPlayingAnimation === 'pulse'"
-            @change="setTrackAnimation('pulse')"
-          />
-        </label>
-        <label class="settings-item settings-item-radio">
-          <span>Equalizer Bars</span>
-          <input
-            type="radio"
-            name="track-animation"
-            value="equalizer"
-            :checked="nowPlayingAnimation === 'equalizer'"
-            @change="setTrackAnimation('equalizer')"
-          />
-        </label>
-        <label class="settings-item settings-item-radio">
-          <span>Orbit Glow</span>
-          <input
-            type="radio"
-            name="track-animation"
-            value="orbit"
-            :checked="nowPlayingAnimation === 'orbit'"
-            @change="setTrackAnimation('orbit')"
-          />
-        </label>
-      </div>
-
-      <button class="settings-close" type="button" @click="closeSettingsMenu">
-        Close
-      </button>
-    </div>
-  </div>
 </template>
 
 <style scoped>
@@ -337,9 +341,11 @@ header {
 }
 
 nav {
+  display: flex;
+  align-items: center;
   width: 100%;
   font-size: 12px;
-  text-align: center;
+  text-align: left;
   margin-top: 2rem;
 }
 
@@ -391,9 +397,8 @@ nav a:first-of-type {
 }
 
 .settings-anchor {
-  position: fixed;
-  right: 1rem;
-  bottom: 1rem;
+  position: relative;
+  margin-left: auto;
   z-index: 120;
 }
 
@@ -413,7 +418,7 @@ nav a:first-of-type {
 .settings-menu {
   position: absolute;
   right: 0;
-  bottom: 56px;
+  top: calc(100% + 8px);
   width: 220px;
   border: 1px solid var(--color-border);
   border-radius: 12px;
@@ -477,7 +482,6 @@ nav a:first-of-type {
   }
 
   nav {
-    text-align: left;
     margin-left: -1rem;
     font-size: 1rem;
     padding: 1rem 0;
