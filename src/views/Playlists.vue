@@ -3,6 +3,7 @@
 <script setup>
 import { computed, ref, onMounted } from 'vue'
 import PlaylistCard from '../components/PlaylistCard.vue'
+import TracksLoader from '../components/TracksLoader.vue'
 import { usePlaylists } from '../composables/usePlaylists.js'
 import {
   classifyPlaylistCategories,
@@ -16,6 +17,7 @@ const activeCategory = ref('all')
 const {
   playlists,
   currentUserId,
+  isPlaylistsLoading,
   isRefreshing,
   isCoolingDown,
   refreshLabel,
@@ -155,7 +157,13 @@ onMounted(fetchPlaylists)
       Browse category/mood/genre playlists from the Explore tab.
     </p>
 
-    <div class="playlist-grid">
+    <TracksLoader
+      v-if="isPlaylistsLoading && !playlists.length"
+      :item-count="12"
+      loading-text="Loading playlists..."
+    />
+
+    <div v-else class="playlist-grid">
       <PlaylistCard v-if="showLikedSongsCard" liked-songs />
 
       <PlaylistCard
@@ -167,7 +175,9 @@ onMounted(fetchPlaylists)
     </div>
 
     <p
-      v-if="!playlists.length || !filteredPlaylists.length"
+      v-if="
+        !isPlaylistsLoading && (!playlists.length || !filteredPlaylists.length)
+      "
       class="empty-state"
     >
       {{ emptyStateMessage }}
@@ -183,7 +193,7 @@ onMounted(fetchPlaylists)
 .title-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 0.75rem;
   flex-wrap: nowrap;
 }
@@ -193,8 +203,8 @@ onMounted(fetchPlaylists)
 }
 
 .playlist-search {
-  width: auto;
-  flex: 1;
+  width: 100%;
+  flex: 0 1 260px;
   min-width: 130px;
   max-width: 260px;
   border: 1px solid rgba(255, 255, 255, 0.25);

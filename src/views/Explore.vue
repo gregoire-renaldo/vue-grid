@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import PlaylistCard from '../components/PlaylistCard.vue'
+import TracksLoader from '../components/TracksLoader.vue'
 import { useExplorePlaylists } from '../composables/useExplorePlaylists.js'
 
 const searchQuery = ref('')
@@ -58,9 +59,11 @@ onMounted(fetchCategoryMoodGenrePlaylists)
 
     <section class="results-section" v-if="searchQuery.trim()">
       <h2>Search Results</h2>
-      <p v-if="isSearchLoading" class="status-text">
-        Loading public playlists...
-      </p>
+      <TracksLoader
+        v-if="isSearchLoading"
+        :item-count="12"
+        loading-text="Loading public playlists..."
+      />
       <p v-else-if="!searchResults.length" class="status-text">
         No public playlists found for this query.
       </p>
@@ -86,9 +89,11 @@ onMounted(fetchCategoryMoodGenrePlaylists)
         </button>
       </div>
       <p v-if="featuredError" class="error-text">{{ featuredError }}</p>
-      <p v-else-if="isFeaturedLoading" class="status-text">
-        Loading featured playlists...
-      </p>
+      <TracksLoader
+        v-else-if="isFeaturedLoading"
+        :item-count="12"
+        loading-text="Loading featured playlists..."
+      />
       <p v-else-if="!featuredPlaylists.length" class="status-text">
         No playlists to display yet. Try Refresh.
       </p>
@@ -123,9 +128,11 @@ onMounted(fetchCategoryMoodGenrePlaylists)
         </button>
       </div>
 
-      <p v-if="isCategoriesLoading" class="status-text">
-        Loading category playlists...
-      </p>
+      <TracksLoader
+        v-if="isCategoriesLoading"
+        :item-count="12"
+        loading-text="Loading category playlists..."
+      />
       <p
         v-else-if="
           !categoriesError && selectedCategoryId && !categoryPlaylists.length
