@@ -20,9 +20,34 @@ const props = defineProps({
     type: String,
     default: 'dust',
   },
+  isMobileFocused: {
+    type: Boolean,
+    default: false,
+  },
 })
 
-defineEmits(['select'])
+const emit = defineEmits(['select', 'focus'])
+
+function isMobileEnvironment() {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return false
+  }
+
+  return window.matchMedia('(hover: none), (pointer: coarse)').matches
+}
+
+function onCardClick() {
+  if (isMobileEnvironment()) {
+    emit('focus', props.track)
+    return
+  }
+
+  emit('select', props.track)
+}
+
+function onPlayClick() {
+  emit('select', props.track)
+}
 </script>
 
 <template>
@@ -32,8 +57,9 @@ defineEmits(['select'])
       current: props.isCurrent,
       playing: props.isCurrent && props.isPlaying,
       anchored: props.isAnchored,
+      'mobile-focused': props.isMobileFocused,
     }"
-    @click="$emit('select', props.track)"
+    @click="onCardClick"
   >
     <img
       :src="props.track.album.images[0]?.url"
@@ -101,10 +127,10 @@ defineEmits(['select'])
       <span class="orbit-ring orbit-ring-3"><span class="orbit-dot" /></span>
     </div>
     <div class="card-overlay">
-      <div class="overlay-icon">
+      <button class="overlay-icon play-control-btn" @click.stop="onPlayClick">
         <span v-if="props.isCurrent && props.isPlaying">⏸</span>
         <span v-else>▶</span>
-      </div>
+      </button>
       <p class="track-title">{{ props.track.name }}</p>
       <p class="track-artist">
         {{ props.track.artists.map(artist => artist.name).join(', ') }}
@@ -204,9 +230,25 @@ defineEmits(['select'])
   opacity: 1;
 }
 
+.grid-item.mobile-focused .card-overlay {
+  opacity: 1;
+}
+
 .overlay-icon {
   font-size: 1.8rem;
   margin-bottom: 6px;
+}
+
+.play-control-btn {
+  border: 0;
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
 }
 
 .dust-layer {
@@ -387,6 +429,7 @@ defineEmits(['select'])
   text-align: center;
   overflow: hidden;
   display: -webkit-box;
+  line-clamp: 2;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
@@ -400,5 +443,16 @@ defineEmits(['select'])
   white-space: nowrap;
   text-overflow: ellipsis;
   width: 100%;
+}
+
+@media (max-width: 768px) {
+  .grid-item:hover .card-overlay {
+    opacity: 0;
+  }
+
+  .grid-item.playing .card-overlay,
+  .grid-item.mobile-focused .card-overlay {
+    opacity: 1;
+  }
 }
 </style>

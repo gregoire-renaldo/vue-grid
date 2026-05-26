@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import TrackCard from '../src/components/TrackCard.vue'
 
@@ -57,5 +57,39 @@ describe('TrackCard', () => {
     expect(wrapper.find('.equalizer-layer').exists()).toBe(true)
     expect(wrapper.findAll('.eq-bar')).toHaveLength(5)
     expect(wrapper.find('.dust-layer').exists()).toBe(false)
+  })
+
+  it('uses focus interaction on mobile and triggers select from play button', async () => {
+    const matchMediaSpy = vi
+      .spyOn(window, 'matchMedia')
+      .mockImplementation(() => ({
+        matches: true,
+        media: '',
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }))
+
+    const wrapper = mount(TrackCard, {
+      props: {
+        track,
+        isCurrent: false,
+        isPlaying: false,
+        isMobileFocused: true,
+      },
+    })
+
+    await wrapper.find('.grid-item').trigger('click')
+    expect(wrapper.emitted('focus')).toHaveLength(1)
+    expect(wrapper.emitted('select')).toBeUndefined()
+
+    await wrapper.find('.play-control-btn').trigger('click')
+    expect(wrapper.emitted('select')).toHaveLength(1)
+    expect(wrapper.emitted('select')[0]).toEqual([track])
+
+    matchMediaSpy.mockRestore()
   })
 })

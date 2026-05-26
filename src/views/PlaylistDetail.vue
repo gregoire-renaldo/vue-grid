@@ -17,6 +17,7 @@ const gridRef = ref(null)
 const isRefreshing = ref(false)
 const nowPlayingAnimation = inject('nowPlayingAnimation', ref('dust'))
 const anchoredTrackId = ref('')
+const focusedTrackId = ref('')
 const { isCoolingDown, label: refreshLabel, startCooldown } = useCooldown(5000)
 
 const playerError = ref(null)
@@ -141,6 +142,13 @@ async function scrollToTrackCardById(trackId, options = {}) {
   }
 }
 
+function handleTrackFocus(track) {
+  const trackId = track?.id || ''
+  if (!trackId) return
+
+  focusedTrackId.value = focusedTrackId.value === trackId ? '' : trackId
+}
+
 watch(
   [() => currentTrack.value?.id, isPlaying],
   ([currentTrackId, playing], [previousTrackId]) => {
@@ -211,8 +219,10 @@ onUnmounted(() => {
         :is-current="isCurrentTrackCard(track.track)"
         :is-playing="isPlaying"
         :is-anchored="anchoredTrackId === track.track.id"
+        :is-mobile-focused="focusedTrackId === track.track.id"
         :playing-animation="nowPlayingAnimation"
         @select="playTrack"
+        @focus="handleTrackFocus"
       />
     </div>
   </div>
