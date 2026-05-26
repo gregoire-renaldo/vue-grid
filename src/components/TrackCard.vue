@@ -29,7 +29,10 @@ const props = defineProps({
 const emit = defineEmits(['select', 'focus'])
 
 function isMobileEnvironment() {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+  if (
+    typeof window === 'undefined' ||
+    typeof window.matchMedia !== 'function'
+  ) {
     return false
   }
 
