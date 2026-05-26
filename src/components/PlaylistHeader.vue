@@ -54,8 +54,19 @@ defineEmits(['shuffle-play'])
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-wrap: wrap;
   gap: 0.75rem;
   margin-bottom: 0.5rem;
+  width: 100%;
+  max-width: 100%;
+}
+
+.playlist-header h1 {
+  margin: 0;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .shuffle-btn {

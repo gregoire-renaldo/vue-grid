@@ -1,5 +1,7 @@
 <script setup>
 import TheWelcome from '../components/TheWelcome.vue'
+import heroDesktop from '../assets/hero_desktop.png'
+import heroMobile from '../assets/hero_mobile.png'
 
 defineProps({
   profile: {
@@ -14,21 +16,44 @@ defineProps({
     <TheWelcome />
 
     <div v-if="profile" class="home-cta">
-      <p class="home-cta-text">
-        You are connected as <strong>{{ profile.display_name }}</strong
-        >.
-      </p>
       <RouterLink to="/playlists" class="home-cta-button">
         Go to your playlists
       </RouterLink>
+    </div>
+
+    <div class="home-hero">
+      <picture>
+        <source :srcset="heroDesktop" media="(min-width: 768px)" />
+        <img
+          :src="heroMobile"
+          alt="Vue Grid hero artwork"
+          class="home-hero-image"
+        />
+      </picture>
     </div>
   </main>
 </template>
 
 <style scoped>
+.home-hero {
+  max-width: 1100px;
+  margin: 0 auto 1.5rem;
+}
+
+.home-hero picture {
+  display: block;
+}
+
+.home-hero-image {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 14px;
+}
+
 .home-cta {
   max-width: 800px;
-  margin: 1.5rem auto 0;
+  margin: 1.5rem auto;
   padding: 1.25rem 1.5rem;
   border-radius: 12px;
   background: rgba(29, 185, 84, 0.12);
@@ -37,14 +62,16 @@ defineProps({
 }
 
 .home-cta-text {
-  margin: 0 0 1rem;
+  margin: 0 0 1.25rem;
   font-size: 1rem;
 }
 
 .home-cta-button {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
+  width: fit-content;
+  margin: 0 auto;
   padding: 0.75rem 1.25rem;
   border-radius: 999px;
   background: #1db954;

@@ -15,6 +15,7 @@ import {
 
 const THEME_STORAGE_KEY = 'vue-grid-theme'
 const TRACK_ANIMATION_STORAGE_KEY = 'vue-grid-track-animation'
+const MOBILE_PLAY_HOTSPOT_STORAGE_KEY = 'vue-grid-mobile-play-hotspot-enabled'
 const AVAILABLE_TRACK_ANIMATIONS = ['dust', 'pulse', 'equalizer', 'orbit']
 
 const profile = ref(null)
@@ -23,6 +24,8 @@ const showSignOutModal = ref(false)
 const showSettingsMenu = ref(false)
 const darkModeEnabled = ref(false)
 const nowPlayingAnimation = ref('dust')
+const mobilePlayHotspotEnabled = ref(false)
+const isMobileDevice = ref(false)
 const route = useRoute()
 const playbackTracks = ref([])
 const playbackPlaylistUri = ref('')
@@ -52,6 +55,8 @@ const showHomeButtonPlacement = computed(
 )
 
 provide('nowPlayingAnimation', nowPlayingAnimation)
+provide('mobilePlayHotspotEnabled', mobilePlayHotspotEnabled)
+provide('isMobileDevice', isMobileDevice)
 
 async function connectToSpotify() {
   if (profile.value) {
@@ -127,6 +132,39 @@ function initializeTrackAnimation() {
   nowPlayingAnimation.value = 'dust'
 }
 
+function syncMobileDeviceState() {
+  if (typeof window === 'undefined') {
+    isMobileDevice.value = false
+    return
+  }
+
+  const supportsMatchMedia = typeof window.matchMedia === 'function'
+  const hasCoarsePointer = supportsMatchMedia
+    ? window.matchMedia('(hover: none), (pointer: coarse)').matches
+    : false
+  const hasTouchCapability =
+    typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0
+
+  isMobileDevice.value = hasCoarsePointer || hasTouchCapability
+}
+
+function initializeMobilePlayHotspotSetting() {
+  const storedValue = localStorage.getItem(MOBILE_PLAY_HOTSPOT_STORAGE_KEY)
+  mobilePlayHotspotEnabled.value = storedValue === 'true'
+}
+
+function setMobilePlayHotspotEnabled(enabled) {
+  mobilePlayHotspotEnabled.value = enabled
+  localStorage.setItem(
+    MOBILE_PLAY_HOTSPOT_STORAGE_KEY,
+    enabled ? 'true' : 'false',
+  )
+}
+
+function onMobilePlayHotspotChange(event) {
+  setMobilePlayHotspotEnabled(Boolean(event?.target?.checked))
+}
+
 function toggleSettingsMenu() {
   showSettingsMenu.value = !showSettingsMenu.value
 }
@@ -156,15 +194,19 @@ onMounted(loadUserProfile)
 onMounted(() => {
   initializeTheme()
   initializeTrackAnimation()
+  initializeMobilePlayHotspotSetting()
+  syncMobileDeviceState()
   window.addEventListener('mousemove', revealNowPlaying)
   window.addEventListener('touchstart', revealNowPlaying, { passive: true })
   window.addEventListener('keydown', revealNowPlaying)
+  window.addEventListener('resize', syncMobileDeviceState)
 })
 
 onUnmounted(() => {
   window.removeEventListener('mousemove', revealNowPlaying)
   window.removeEventListener('touchstart', revealNowPlaying)
   window.removeEventListener('keydown', revealNowPlaying)
+  window.removeEventListener('resize', syncMobileDeviceState)
 })
 </script>
 
@@ -181,11 +223,7 @@ onUnmounted(() => {
           @click="connectToSpotify"
           class="connect-button nav-connect-button"
         >
-          {{
-            profile
-              ? `Connected`
-              : 'Connect to Spotify'
-          }}
+          {{ profile ? `Connected` : 'Connect to Spotify' }}
         </button>
 
         <div class="settings-anchor">
@@ -256,6 +294,18 @@ onUnmounted(() => {
               </label>
             </div>
 
+            <div v-if="isMobileDevice" class="settings-section-title">
+              Mobile interactions
+            </div>
+            <label v-if="isMobileDevice" class="settings-item">
+              <span>Tap hotspot to play instantly</span>
+              <input
+                type="checkbox"
+                :checked="mobilePlayHotspotEnabled"
+                @change="onMobilePlayHotspotChange"
+              />
+            </label>
+
             <button
               class="settings-close"
               type="button"
@@ -284,6 +334,7 @@ onUnmounted(() => {
     <RouterView v-slot="{ Component }">
       <component
         :is="Component"
+        :key="$route.path"
         v-bind="showHomeButtonPlacement ? { profile } : {}"
       />
     </RouterView>
