@@ -348,14 +348,15 @@ onUnmounted(() => {
 
             <div class="settings-made-with-love">
               <span>Made with love</span>
-              <span aria-hidden="true">•</span>
-              <a :href="CREATOR_LINKEDIN_URL" target="_blank" rel="noreferrer"
-                >LinkedIn</a
-              >
-              <span aria-hidden="true">•</span>
-              <a :href="CREATOR_GITHUB_URL" target="_blank" rel="noreferrer"
-                >GitHub</a
-              >
+              <div class="settings-made-with-love-links">
+                <a :href="CREATOR_LINKEDIN_URL" target="_blank" rel="noreferrer"
+                  >LinkedIn</a
+                >
+                <span aria-hidden="true">•</span>
+                <a :href="CREATOR_GITHUB_URL" target="_blank" rel="noreferrer"
+                  >GitHub</a
+                >
+              </div>
             </div>
           </div>
         </div>
@@ -582,12 +583,19 @@ nav a:first-of-type {
   padding-top: 0.55rem;
   border-top: 1px solid var(--color-border);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
+  gap: 0.25rem;
   font-size: 0.75rem;
   color: var(--color-text);
   opacity: 0.8;
+}
+
+.settings-made-with-love-links {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .settings-made-with-love a {
