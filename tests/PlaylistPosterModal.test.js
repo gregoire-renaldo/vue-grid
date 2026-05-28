@@ -38,7 +38,7 @@ describe('PlaylistPosterModal', () => {
       createCanvasContextMock(),
     )
     vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockReturnValue(
-      'data:image/png;base64,mock',
+      'data:image/webp;base64,mock',
     )
   })
 

@@ -1,6 +1,10 @@
 <script setup>
 import { computed, ref, watch, nextTick } from 'vue'
 
+const POSTER_MIME_TYPE = 'image/webp'
+const POSTER_FILE_EXTENSION = 'webp'
+const POSTER_EXPORT_QUALITY = 0.82
+
 const props = defineProps({
   open: {
     type: Boolean,
@@ -267,7 +271,10 @@ async function renderPoster() {
       size - padding - Math.round(size * 0.035),
     )
 
-    posterDataUrl.value = canvas.toDataURL('image/png')
+    posterDataUrl.value = canvas.toDataURL(
+      POSTER_MIME_TYPE,
+      POSTER_EXPORT_QUALITY,
+    )
   } catch (error) {
     renderError.value = error?.message || 'Unable to generate playlist poster.'
   } finally {
@@ -283,7 +290,7 @@ async function downloadPoster() {
     .replace(/[^a-z0-9]/gi, '-')
     .toLowerCase()
   anchor.href = posterDataUrl.value
-  anchor.download = `${safeName || 'playlist'}-poster.png`
+  anchor.download = `${safeName || 'playlist'}-poster.${POSTER_FILE_EXTENSION}`
   anchor.click()
 }
 
@@ -299,7 +306,9 @@ async function sharePoster() {
   try {
     const response = await fetch(posterDataUrl.value)
     const blob = await response.blob()
-    const file = new File([blob], 'playlist-poster.png', { type: 'image/png' })
+    const file = new File([blob], `playlist-poster.${POSTER_FILE_EXTENSION}`, {
+      type: POSTER_MIME_TYPE,
+    })
 
     if (navigator.canShare?.({ files: [file] })) {
       await navigator.share({
@@ -321,7 +330,17 @@ async function sharePoster() {
 }
 
 async function shareToInstagram() {
-  if (canNativeShare.value) {
+  const supportsMatchMedia =
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+  const hasCoarsePointer = supportsMatchMedia
+    ? window.matchMedia('(hover: none), (pointer: coarse)').matches
+    : false
+  const hasTouchCapability =
+    typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0
+  const shouldUseNativeShare =
+    canNativeShare.value && (hasCoarsePointer || hasTouchCapability)
+
+  if (shouldUseNativeShare) {
     await sharePoster()
     return
   }

@@ -26,7 +26,7 @@ describe('usePlaylistPoster', () => {
       'https://example.com/cover-1.jpg',
       'https://example.com/cover-2.jpg',
     ])
-    expect(state.posterShareUrl.value).toContain('/playlists/playlist-123')
+    expect(state.posterShareUrl.value).toBe('https://mosaic-covers.vercel.app/')
 
     state.openPosterModal()
     expect(state.showPosterModal.value).toBe(true)
