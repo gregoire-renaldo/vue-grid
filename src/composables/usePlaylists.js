@@ -128,6 +128,11 @@ export function usePlaylists({ cooldownMs = 5000 } = {}) {
       }
 
       if (cachedEntry && !isCacheStale(cachedEntry)) {
+        // Keep category classification accurate when using fresh cache.
+        const token = await getValidAccessToken()
+        if (token) {
+          await fetchCurrentUserId(token)
+        }
         return cachedEntry.value.playlists
       }
 
