@@ -1,8 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
-import Playlists from '../views/Playlists.vue'
-import PlaylistDetail from '../views/PlaylistDetail.vue'
-import Explore from '../views/Explore.vue'
+
+const Playlists = () => import('../views/Playlists.vue')
+const PlaylistDetail = () => import('../views/PlaylistDetail.vue')
+const Explore = () => import('../views/Explore.vue')
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),

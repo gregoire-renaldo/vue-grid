@@ -49,6 +49,8 @@ const to = computed(() => {
         :src="props.playlist.images[0].url"
         alt="Playlist cover"
         class="playlist-cover"
+        loading="lazy"
+        decoding="async"
       />
       <div v-else class="playlist-cover playlist-cover-fallback">♫</div>
       <div class="playlist-info">
