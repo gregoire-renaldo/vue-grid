@@ -7,7 +7,10 @@ vi.mock('../src/spotifyAuth.js', () => ({
 
 import { usePlaylists } from '../src/composables/usePlaylists.js'
 import { getValidAccessToken } from '../src/spotifyAuth.js'
-import { __resetSpotifyCacheForTests } from '../src/utils/spotifyCache.js'
+import {
+  __resetSpotifyCacheForTests,
+  cachePlaylists,
+} from '../src/utils/spotifyCache.js'
 
 function mountUsePlaylists() {
   let state
@@ -140,6 +143,34 @@ describe('usePlaylists', () => {
 
     expect(state.playlists.value.map(playlist => playlist.name)).toContain(
       'Daily Mix 1',
+    )
+
+    wrapper.unmount()
+  })
+
+  it('hydrates current user id even when serving playlists from fresh cache', async () => {
+    await cachePlaylists([
+      { id: 'owned-1', name: 'My Playlist', owner: { id: 'user-123' } },
+    ])
+
+    getValidAccessToken.mockResolvedValue('token')
+    const fetchMock = createPlaylistsFetchMock({ playlists: [] })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { state, wrapper } = mountUsePlaylists()
+    const result = await state.fetchPlaylists()
+
+    expect(result).toHaveLength(1)
+    expect(state.currentUserId.value).toBe('user-123')
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.spotify.com/v1/me',
+      expect.objectContaining({
+        headers: { Authorization: 'Bearer token' },
+      }),
+    )
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      'https://api.spotify.com/v1/me/playlists?limit=50',
+      expect.anything(),
     )
 
     wrapper.unmount()
