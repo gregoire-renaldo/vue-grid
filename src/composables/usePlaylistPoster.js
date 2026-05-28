@@ -1,6 +1,8 @@
 import { computed, ref } from 'vue'
 
-export function usePlaylistPoster({ tracks, route }) {
+const POSTER_SHARE_URL = 'https://mosaic-covers.vercel.app/'
+
+export function usePlaylistPoster({ tracks }) {
   const showPosterModal = ref(false)
 
   const posterCoverUrls = computed(() =>
@@ -10,8 +12,7 @@ export function usePlaylistPoster({ tracks, route }) {
   )
 
   const posterShareUrl = computed(() => {
-    if (typeof window === 'undefined') return ''
-    return `${window.location.origin}${route.fullPath}`
+    return POSTER_SHARE_URL
   })
 
   function openPosterModal() {
