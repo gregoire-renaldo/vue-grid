@@ -88,6 +88,13 @@ export function useSpotifyPlayback({
     return String(playlistId)
   }
 
+  function isRestrictionViolationError(error) {
+    const message = String(error?.message || '').toLowerCase()
+    return (
+      message.includes('restriction violated') || message.includes('restricted')
+    )
+  }
+
   function setCurrentTrackFromTrack(
     track,
     playing = true,
@@ -414,61 +421,6 @@ export function useSpotifyPlayback({
     return tracksMatch(currentTrack.value, track)
   }
 
-  function isRestrictionViolationError(error) {
-    const message = String(error?.message || '').toLowerCase()
-
-    return (
-      message.includes('restriction violated') ||
-      (message.includes('restriction') &&
-        message.includes('player command failed'))
-    )
-  }
-
-  async function trySkipToNextPlayableTrack(failedTrack, token) {
-    const trackItems = tracks.value || []
-    if (!trackItems.length) return false
-
-    const failedTrackIndex = trackItems.findIndex(item =>
-      tracksMatch(item?.track, failedTrack),
-    )
-
-    if (failedTrackIndex < 0 || failedTrackIndex >= trackItems.length - 1) {
-      return false
-    }
-
-    for (let index = failedTrackIndex + 1; index < trackItems.length; index++) {
-      const nextTrack = trackItems[index]?.track
-      if (!nextTrack?.uri) continue
-
-      const playBody = isLikedSongs
-        ? {
-            uris: [nextTrack.uri],
-          }
-        : {
-            context_uri: playlistUri.value,
-            offset: { position: index },
-          }
-
-      try {
-        await startPlaybackRequest(token, playBody, 1)
-        setCurrentTrackFromTrack(
-          nextTrack,
-          true,
-          resolvePlaylistName(),
-          resolvePlaylistId(),
-        )
-        await syncPlayerState()
-        return true
-      } catch (error) {
-        if (!isRestrictionViolationError(error)) {
-          throw error
-        }
-      }
-    }
-
-    return false
-  }
-
   function loadSDK() {
     return new Promise(resolve => {
       if (window.Spotify) {
@@ -566,16 +518,15 @@ export function useSpotifyPlayback({
 
     playerError.value = null
     isPreparingPlayback.value = true
+    const selectedTrackIndex = tracks.value.findIndex(
+      playlistTrack => playlistTrack.track.id === track.id,
+    )
 
     try {
       await ensurePlaybackDeviceReady(token)
       logPlaybackDiagnostic('ready-check', { ready: true, trackId: track.id })
 
       await transferPlaybackToWebPlayer(token)
-
-      const selectedTrackIndex = tracks.value.findIndex(
-        playlistTrack => playlistTrack.track.id === track.id,
-      )
 
       const playBody = isLikedSongs
         ? {
@@ -595,17 +546,43 @@ export function useSpotifyPlayback({
         resolvePlaylistId(),
       )
       await syncPlayerState()
-    } catch (caughtError) {
-      let error = caughtError
+    } catch (error) {
+      if (isRestrictionViolationError(error)) {
+        const fallbackIndex = tracks.value.findIndex(
+          (playlistTrack, index) =>
+            index > selectedTrackIndex &&
+            playlistTrack?.track?.id &&
+            playlistTrack.track.id !== track.id,
+        )
+        const fallbackTrack =
+          fallbackIndex >= 0 ? tracks.value[fallbackIndex]?.track : null
 
-      if (token && isRestrictionViolationError(error)) {
-        try {
-          const skipped = await trySkipToNextPlayableTrack(track, token)
-          if (skipped) {
+        if (fallbackTrack) {
+          try {
+            const fallbackBody = isLikedSongs
+              ? {
+                  uris: [fallbackTrack.uri],
+                }
+              : {
+                  context_uri: playlistUri.value,
+                  offset: { position: fallbackIndex },
+                }
+
+            await startPlaybackRequest(token, fallbackBody)
+            setCurrentTrackFromTrack(
+              fallbackTrack,
+              true,
+              resolvePlaylistName(),
+              resolvePlaylistId(),
+            )
+            await syncPlayerState()
+            playerError.value = null
+            return
+          } catch (fallbackError) {
+            playerError.value =
+              fallbackError?.message || 'Unable to start playback.'
             return
           }
-        } catch (skipError) {
-          error = skipError
         }
       }
 
@@ -699,20 +676,7 @@ export function useSpotifyPlayback({
         resolvePlaylistId(),
       )
       await syncPlayerState()
-    } catch (caughtError) {
-      let error = caughtError
-
-      if (token && isRestrictionViolationError(error)) {
-        try {
-          const skipped = await trySkipToNextPlayableTrack(randomTrack, token)
-          if (skipped) {
-            return
-          }
-        } catch (skipError) {
-          error = skipError
-        }
-      }
-
+    } catch (error) {
       playerError.value = error?.message || 'Unable to start shuffled playback.'
     } finally {
       isPreparingPlayback.value = false

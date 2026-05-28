@@ -55,21 +55,22 @@ const playlistLink = computed(() => {
       alt="Album cover"
       class="now-playing-cover"
     />
-    <RouterLink v-if="playlistLink" :to="playlistLink" class="now-playing-info">
+    <div class="now-playing-info">
       <span class="now-playing-title">{{ props.currentTrack.name }}</span>
       <span class="now-playing-artist">
         {{ props.currentTrack.artists.map(artist => artist.name).join(', ') }}
       </span>
-      <span v-if="props.currentTrack.playlistName" class="now-playing-source">
+      <RouterLink
+        v-if="props.currentTrack.playlistName && playlistLink"
+        :to="playlistLink"
+        class="now-playing-source now-playing-source-link"
+      >
         From: {{ props.currentTrack.playlistName }}
-      </span>
-    </RouterLink>
-    <div v-else class="now-playing-info">
-      <span class="now-playing-title">{{ props.currentTrack.name }}</span>
-      <span class="now-playing-artist">
-        {{ props.currentTrack.artists.map(artist => artist.name).join(', ') }}
-      </span>
-      <span v-if="props.currentTrack.playlistName" class="now-playing-source">
+      </RouterLink>
+      <span
+        v-else-if="props.currentTrack.playlistName"
+        class="now-playing-source"
+      >
         From: {{ props.currentTrack.playlistName }}
       </span>
     </div>
@@ -159,7 +160,6 @@ const playlistLink = computed(() => {
 
 .now-playing-info {
   flex: 1;
-  min-width: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -190,13 +190,12 @@ const playlistLink = computed(() => {
   text-overflow: ellipsis;
 }
 
-a.now-playing-info {
+.now-playing-source-link {
   text-decoration: none;
-  color: inherit;
 }
 
-a.now-playing-info:active {
-  opacity: 0.75;
+.now-playing-source-link:hover {
+  text-decoration: underline;
 }
 
 .seek-row {
@@ -241,47 +240,5 @@ a.now-playing-info:active {
 .stop-btn {
   font-size: 1rem;
   color: #b3b3b3;
-}
-
-@media (max-width: 768px) {
-  .now-playing {
-    gap: 0.5rem;
-    padding: 0 0.75rem;
-  }
-
-  .now-playing-cover {
-    width: 42px;
-    height: 42px;
-  }
-
-  .now-playing-controls {
-    flex: 0 0 auto;
-    gap: 0.25rem;
-  }
-
-  .seek-row {
-    display: none;
-  }
-
-  .stop-btn {
-    display: none;
-  }
-
-  .now-playing-btn {
-    font-size: 1.2rem;
-    padding: 0.2rem 0.3rem;
-  }
-
-  .now-playing-title {
-    font-size: 0.86rem;
-  }
-
-  .now-playing-artist {
-    display: none;
-  }
-
-  .now-playing-source {
-    font-size: 0.76rem;
-  }
 }
 </style>
