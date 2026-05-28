@@ -3,6 +3,9 @@ import TheWelcome from '../components/TheWelcome.vue'
 import heroDesktop from '../assets/hero_desktop.png'
 import heroMobile from '../assets/hero_mobile.png'
 
+const creatorGithubUrl = 'https://github.com/gregoire-renaldo'
+const creatorLinkedinUrl = 'https://www.linkedin.com/in/gregoire-renaldo/'
+
 defineProps({
   profile: {
     type: Object,
@@ -30,6 +33,16 @@ defineProps({
           class="home-hero-image"
         />
       </picture>
+    </div>
+
+    <div class="home-made-with-love">
+      <span>Made with love</span>
+      <span aria-hidden="true">•</span>
+      <a :href="creatorLinkedinUrl" target="_blank" rel="noreferrer"
+        >LinkedIn</a
+      >
+      <span aria-hidden="true">•</span>
+      <a :href="creatorGithubUrl" target="_blank" rel="noreferrer">GitHub</a>
     </div>
   </main>
 </template>
@@ -86,5 +99,28 @@ defineProps({
 .home-cta-button:hover {
   background: #1ed760;
   transform: translateY(-1px);
+}
+
+.home-made-with-love {
+  margin: 0.5rem auto 1.25rem;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.82rem;
+  color: rgba(242, 255, 246, 0.78);
+}
+
+.home-made-with-love a {
+  color: #8ee7b3;
+  text-decoration: none;
+}
+
+.home-made-with-love a:hover {
+  text-decoration: underline;
 }
 </style>

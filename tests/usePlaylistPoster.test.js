@@ -4,7 +4,7 @@ import { reactive, ref } from 'vue'
 import { usePlaylistPoster } from '../src/composables/usePlaylistPoster.js'
 
 describe('usePlaylistPoster', () => {
-  it('derives cover urls, share url, and toggles modal state', () => {
+  it('derives cover urls, generic share url, and toggles modal state', () => {
     const tracks = ref([
       {
         track: {
@@ -26,7 +26,7 @@ describe('usePlaylistPoster', () => {
       'https://example.com/cover-1.jpg',
       'https://example.com/cover-2.jpg',
     ])
-    expect(state.posterShareUrl.value).toContain('/playlists/playlist-123')
+    expect(state.posterShareUrl.value).toBe(`${window.location.origin}/`)
 
     state.openPosterModal()
     expect(state.showPosterModal.value).toBe(true)

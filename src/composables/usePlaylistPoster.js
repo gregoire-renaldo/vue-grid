@@ -11,7 +11,7 @@ export function usePlaylistPoster({ tracks, route }) {
 
   const posterShareUrl = computed(() => {
     if (typeof window === 'undefined') return ''
-    return `${window.location.origin}${route.fullPath}`
+    return `${window.location.origin}/`
   })
 
   function openPosterModal() {

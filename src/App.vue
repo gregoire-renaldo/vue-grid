@@ -17,6 +17,8 @@ const THEME_STORAGE_KEY = 'vue-grid-theme'
 const TRACK_ANIMATION_STORAGE_KEY = 'vue-grid-track-animation'
 const MOBILE_PLAY_HOTSPOT_STORAGE_KEY = 'vue-grid-mobile-play-hotspot-enabled'
 const AVAILABLE_TRACK_ANIMATIONS = ['dust', 'pulse', 'equalizer', 'orbit']
+const CREATOR_GITHUB_URL = 'https://github.com/gregoire-renaldo'
+const CREATOR_LINKEDIN_URL = 'https://www.linkedin.com/in/gregoire-renaldo/'
 
 const profile = ref(null)
 const authError = ref('')
@@ -343,6 +345,19 @@ onUnmounted(() => {
             >
               Close
             </button>
+
+            <div class="settings-made-with-love">
+              <span>Made with love</span>
+              <div class="settings-made-with-love-links">
+                <a :href="CREATOR_LINKEDIN_URL" target="_blank" rel="noreferrer"
+                  >LinkedIn</a
+                >
+                <span aria-hidden="true">•</span>
+                <a :href="CREATOR_GITHUB_URL" target="_blank" rel="noreferrer"
+                  >GitHub</a
+                >
+              </div>
+            </div>
           </div>
         </div>
       </nav>
@@ -561,6 +576,35 @@ nav a:first-of-type {
   border-radius: 8px;
   padding: 0.35rem 0.5rem;
   cursor: pointer;
+}
+
+.settings-made-with-love {
+  margin-top: 0.7rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--color-text);
+  opacity: 0.8;
+}
+
+.settings-made-with-love-links {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.settings-made-with-love a {
+  color: #8ee7b3;
+  text-decoration: none;
+}
+
+.settings-made-with-love a:hover {
+  text-decoration: underline;
 }
 
 @media (min-width: 1024px) {

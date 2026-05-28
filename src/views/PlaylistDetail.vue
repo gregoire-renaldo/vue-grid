@@ -5,12 +5,12 @@ import { useRoute, useRouter } from 'vue-router'
 import { getValidAccessToken } from '../spotifyAuth.js'
 import { usePlaylistTracks } from '../composables/usePlaylistTracks.js'
 import { useSpotifyPlayback } from '../composables/useSpotifyPlayback.js'
-import { useCooldown } from '../composables/useCooldown.js'
 import { usePlaylistPoster } from '../composables/usePlaylistPoster.js'
+import { useCooldown } from '../composables/useCooldown.js'
 import PlaylistHeader from '../components/PlaylistHeader.vue'
+import PlaylistPosterModal from '../components/PlaylistPosterModal.vue'
 import TracksLoader from '../components/TracksLoader.vue'
 import TrackCard from '../components/TrackCard.vue'
-import PlaylistPosterModal from '../components/PlaylistPosterModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -19,10 +19,7 @@ const isLikedSongs = playlistId === 'liked-songs'
 const gridRef = ref(null)
 const isRefreshing = ref(false)
 const nowPlayingAnimation = inject('nowPlayingAnimation', ref('dust'))
-const mobilePlayHotspotEnabled = inject('mobilePlayHotspotEnabled', ref(false))
-const isMobileDevice = inject('isMobileDevice', ref(false))
 const anchoredTrackId = ref('')
-const focusedTrackId = ref('')
 const { isCoolingDown, label: refreshLabel, startCooldown } = useCooldown(5000)
 
 const playerError = ref(null)
@@ -86,6 +83,34 @@ async function refreshPlaylist() {
   } finally {
     isRefreshing.value = false
   }
+}
+
+function navigateToSourcePlaylist(focusTrackId = '') {
+  const sourcePlaylistId = currentTrack.value?.sourcePlaylistId
+  if (!sourcePlaylistId || sourcePlaylistId === playlistId) return false
+
+  const resolvedFocusTrackId =
+    focusTrackId || currentTrack.value?.focusTrackId || currentTrack.value?.id
+
+  router.push({
+    name: 'PlaylistDetail',
+    params: { id: sourcePlaylistId },
+    query: resolvedFocusTrackId ? { focusTrack: resolvedFocusTrackId } : {},
+  })
+  return true
+}
+
+async function onSelectTrack(track) {
+  if (isCurrentTrackCard(track) && navigateToSourcePlaylist(track?.id)) {
+    return
+  }
+
+  await playTrack(track)
+}
+
+function onFocusTrack(track) {
+  if (!isCurrentTrackCard(track)) return
+  navigateToSourcePlaylist(track?.id)
 }
 
 watch(
@@ -155,57 +180,6 @@ async function scrollToTrackCardById(trackId, options = {}) {
   }
 }
 
-function handleTrackFocus(track) {
-  const trackId = track?.id || ''
-  if (!trackId) return
-
-  const sourcePlaylistId = currentTrack.value?.sourcePlaylistId
-  const isSourcePlaylistDifferent =
-    sourcePlaylistId &&
-    sourcePlaylistId !== 'app-shell' &&
-    sourcePlaylistId !== String(playlistId)
-
-  if (isSourcePlaylistDifferent && isCurrentTrackCard(track)) {
-    router.push({
-      name: 'PlaylistDetail',
-      params: { id: sourcePlaylistId },
-      query: {
-        focusTrack:
-          currentTrack.value?.focusTrackId ||
-          currentTrack.value?.id ||
-          track.id,
-      },
-    })
-    return
-  }
-
-  focusedTrackId.value = focusedTrackId.value === trackId ? '' : trackId
-}
-
-async function handleTrackSelect(track) {
-  const sourcePlaylistId = currentTrack.value?.sourcePlaylistId
-  const isSourcePlaylistDifferent =
-    sourcePlaylistId &&
-    sourcePlaylistId !== 'app-shell' &&
-    sourcePlaylistId !== String(playlistId)
-
-  if (isSourcePlaylistDifferent && isCurrentTrackCard(track)) {
-    await router.push({
-      name: 'PlaylistDetail',
-      params: { id: sourcePlaylistId },
-      query: {
-        focusTrack:
-          currentTrack.value?.focusTrackId ||
-          currentTrack.value?.id ||
-          track.id,
-      },
-    })
-    return
-  }
-
-  await playTrack(track)
-}
-
 watch(
   [() => currentTrack.value?.id, isPlaying],
   ([currentTrackId, playing], [previousTrackId]) => {
@@ -217,7 +191,6 @@ watch(
 
 onMounted(async () => {
   await Promise.all([fetchPlaylistTracks(), initPlayer()])
-  await nextTick()
 
   const focusTrack =
     typeof route.query?.focusTrack === 'string' ? route.query.focusTrack : ''
@@ -278,12 +251,9 @@ onUnmounted(() => {
         :is-current="isCurrentTrackCard(track.track)"
         :is-playing="isPlaying"
         :is-anchored="anchoredTrackId === track.track.id"
-        :is-mobile-focused="focusedTrackId === track.track.id"
-        :use-focus-interaction="isMobileDevice"
-        :enable-mobile-play-hotspot="mobilePlayHotspotEnabled"
         :playing-animation="nowPlayingAnimation"
-        @select="handleTrackSelect"
-        @focus="handleTrackFocus"
+        @select="onSelectTrack"
+        @focus="onFocusTrack"
       />
     </div>
 

@@ -29,6 +29,8 @@ const selectedCoverCount = ref(36)
 const useAllCovers = ref(false)
 const includePosterTitle = ref(true)
 const avoidRepeatedCovers = ref(true)
+const shareHint = ref('')
+let shareHintTimer = null
 
 const normalizedCoverUrls = computed(() => {
   const urls = (props.coverUrls || []).filter(Boolean)
@@ -52,35 +54,19 @@ const selectedImageUrls = computed(() => {
   return normalizedCoverUrls.value.slice(0, effectiveCoverCount.value)
 })
 
-const encodedShareUrl = computed(() => encodeURIComponent(props.shareUrl || ''))
-const encodedShareText = computed(() =>
-  encodeURIComponent(`Check out this playlist poster: ${props.playlistName}`),
-)
+const shareMessage = computed(() => {
+  const baseMessage = `Check out this playlist poster: ${props.playlistName}`
+  if (!props.shareUrl) return baseMessage
+  return `${baseMessage} ${props.shareUrl}`
+})
+
 const canNativeShare = computed(
   () =>
     typeof navigator !== 'undefined' && typeof navigator.share === 'function',
 )
-
-const xShareUrl = computed(
-  () =>
-    `https://twitter.com/intent/tweet?text=${encodedShareText.value}&url=${encodedShareUrl.value}`,
-)
-
-const facebookShareUrl = computed(
-  () => `https://www.facebook.com/sharer/sharer.php?u=${encodedShareUrl.value}`,
-)
-
-const linkedinShareUrl = computed(
-  () =>
-    `https://www.linkedin.com/sharing/share-offsite/?url=${encodedShareUrl.value}`,
-)
-
-const pinterestShareUrl = computed(
-  () =>
-    `https://pinterest.com/pin/create/button/?url=${encodedShareUrl.value}&description=${encodedShareText.value}`,
-)
-
-const instagramShareUrl = computed(() => 'https://www.instagram.com/')
+const creatorGithubUrl = 'https://github.com/gregoire-renaldo'
+const creatorLinkedinUrl =
+  'https://www.linkedin.com/in/gregoire-renaldo-440b791b/'
 
 function closeModal() {
   emit('close')
@@ -287,47 +273,106 @@ async function downloadPoster() {
   anchor.click()
 }
 
-async function sharePoster() {
+async function getPosterFile() {
+  if (!posterDataUrl.value) return null
+
+  const response = await fetch(posterDataUrl.value)
+  const blob = await response.blob()
+  return new File([blob], 'playlist-poster.png', { type: 'image/png' })
+}
+
+async function tryNativeImageShare() {
   if (
-    !posterDataUrl.value ||
     typeof navigator === 'undefined' ||
     typeof navigator.share !== 'function'
   ) {
-    return
+    return false
   }
 
-  try {
-    const response = await fetch(posterDataUrl.value)
-    const blob = await response.blob()
-    const file = new File([blob], 'playlist-poster.png', { type: 'image/png' })
+  const file = await getPosterFile()
+  if (!file) return false
 
-    if (navigator.canShare?.({ files: [file] })) {
-      await navigator.share({
-        title: props.playlistName,
-        text: `Check out this playlist poster: ${props.playlistName}`,
-        files: [file],
-      })
+  if (navigator.canShare?.({ files: [file] })) {
+    await navigator.share({
+      title: props.playlistName,
+      text: shareMessage.value,
+      files: [file],
+    })
+    return true
+  }
+
+  await navigator.share({
+    title: props.playlistName,
+    text: shareMessage.value,
+    url: props.shareUrl,
+  })
+  return true
+}
+
+async function sharePoster() {
+  if (!posterDataUrl.value) return
+
+  try {
+    const shared = await tryNativeImageShare()
+    if (shared) {
       return
     }
 
-    await navigator.share({
-      title: props.playlistName,
-      text: `Check out this playlist: ${props.playlistName}`,
-      url: props.shareUrl,
-    })
+    await downloadPoster()
   } catch {
     // Ignore abort/share errors.
   }
 }
 
-async function shareToInstagram() {
-  if (canNativeShare.value) {
-    await sharePoster()
-    return
-  }
+function showShareHint(message) {
+  shareHint.value = message
+  if (shareHintTimer) clearTimeout(shareHintTimer)
+  shareHintTimer = window.setTimeout(() => {
+    shareHint.value = ''
+    shareHintTimer = null
+  }, 6000)
+}
 
-  if (typeof window !== 'undefined') {
-    window.open(instagramShareUrl.value, '_blank', 'noopener,noreferrer')
+function openExternalShare(url) {
+  if (typeof window === 'undefined' || !url) return
+  window.open(url, '_blank', 'noopener,noreferrer')
+}
+
+// Per-network compose/upload page URLs (best available from web — none support
+// pre-attaching a locally generated image blob; native share is the only path
+// for true image attachment on mobile).
+const networkComposeUrls = {
+  x: 'https://x.com/compose/post',
+  facebook: 'https://www.facebook.com/',
+  instagram: 'https://www.instagram.com/',
+  pinterest: 'https://www.pinterest.com/pin-builder/',
+  linkedin: 'https://www.linkedin.com/feed/?shareActive=true',
+}
+
+const networkLabels = {
+  x: 'X',
+  facebook: 'Facebook',
+  instagram: 'Instagram',
+  pinterest: 'Pinterest',
+  linkedin: 'LinkedIn',
+}
+
+async function shareToNetwork(network) {
+  if (!posterDataUrl.value) return
+
+  try {
+    // Mobile: native OS share sheet with image file attached.
+    const shared = await tryNativeImageShare()
+    if (shared) return
+
+    // Desktop fallback: save the image then open the platform's compose page.
+    await downloadPoster()
+    openExternalShare(networkComposeUrls[network])
+    showShareHint(
+      `Poster saved — attach it to your post on ${networkLabels[network] ?? 'the platform'}!`,
+    )
+  } catch {
+    // Ignore abort/share errors.
   }
 }
 
@@ -473,7 +518,7 @@ watch(
         <button
           type="button"
           class="poster-btn secondary"
-          :disabled="!posterDataUrl || isRendering || !canNativeShare"
+          :disabled="!posterDataUrl || isRendering"
           @click="sharePoster"
         >
           Share
@@ -481,13 +526,12 @@ watch(
       </div>
 
       <div class="poster-share-links">
-        <a
+        <button
+          type="button"
           class="social-link-btn"
-          :href="xShareUrl"
-          target="_blank"
-          rel="noreferrer"
           aria-label="Share on X"
           title="Share on X"
+          @click="shareToNetwork('x')"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path
@@ -495,15 +539,14 @@ watch(
               d="M18.146 2h3.308l-7.227 8.26L22.72 22h-6.64l-5.2-6.8L4.93 22H1.62l7.73-8.835L1.2 2h6.8l4.7 6.23L18.146 2Zm-1.16 18h1.833L7.01 3.894H5.044L16.987 20Z"
             />
           </svg>
-        </a>
+        </button>
 
-        <a
+        <button
+          type="button"
           class="social-link-btn"
-          :href="facebookShareUrl"
-          target="_blank"
-          rel="noreferrer"
           aria-label="Share on Facebook"
           title="Share on Facebook"
+          @click="shareToNetwork('facebook')"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path
@@ -511,14 +554,14 @@ watch(
               d="M13.5 8.5V6.6c0-.7.2-1.1 1.2-1.1H16V2.2h-2.6c-3 0-4.4 1.3-4.4 4.3v2H6.5V12H9v9.8h4.5V12h2.9l.4-3.5h-3.3Z"
             />
           </svg>
-        </a>
+        </button>
 
         <button
           type="button"
           class="social-link-btn"
           aria-label="Share on Instagram"
           title="Share on Instagram"
-          @click="shareToInstagram"
+          @click="shareToNetwork('instagram')"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path
@@ -528,13 +571,12 @@ watch(
           </svg>
         </button>
 
-        <a
+        <button
+          type="button"
           class="social-link-btn"
-          :href="pinterestShareUrl"
-          target="_blank"
-          rel="noreferrer"
           aria-label="Share on Pinterest"
           title="Share on Pinterest"
+          @click="shareToNetwork('pinterest')"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path
@@ -542,15 +584,14 @@ watch(
               d="M12 2C6.49 2 2 6.34 2 11.67c0 3.86 2.3 6.99 5.58 8.18-.08-.7-.16-1.78.03-2.54.18-.68 1.15-4.35 1.15-4.35s-.29-.58-.29-1.45c0-1.36.81-2.38 1.81-2.38.85 0 1.26.62 1.26 1.37 0 .84-.55 2.1-.83 3.26-.24.98.51 1.77 1.52 1.77 1.82 0 3.22-1.85 3.22-4.53 0-2.37-1.76-4.03-4.27-4.03-2.91 0-4.62 2.12-4.62 4.31 0 .85.34 1.77.77 2.27.08.1.09.18.07.27-.08.31-.25.98-.29 1.12-.04.18-.13.22-.3.13-1.12-.51-1.81-2.05-1.81-3.3 0-2.69 2.01-5.16 5.8-5.16 3.04 0 5.4 2.11 5.4 4.92 0 2.93-1.91 5.29-4.56 5.29-.89 0-1.72-.45-2.01-.98l-.54 2.03c-.2.75-.75 1.69-1.11 2.26.84.25 1.72.39 2.64.39 5.51 0 10-4.33 10-9.67C22 6.34 17.51 2 12 2Z"
             />
           </svg>
-        </a>
+        </button>
 
-        <a
+        <button
+          type="button"
           class="social-link-btn"
-          :href="linkedinShareUrl"
-          target="_blank"
-          rel="noreferrer"
           aria-label="Share on LinkedIn"
           title="Share on LinkedIn"
+          @click="shareToNetwork('linkedin')"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path
@@ -558,7 +599,19 @@ watch(
               d="M6.94 8.73a2.2 2.2 0 1 1 0-4.39 2.2 2.2 0 0 1 0 4.39ZM4.9 20.5h4.08v-10H4.9v10ZM11.36 10.5v10h4.08v-5.22c0-1.38.26-2.72 1.97-2.72 1.68 0 1.7 1.57 1.7 2.8v5.14h4.09v-5.93c0-2.92-.63-5.16-4.04-5.16-1.64 0-2.74.9-3.2 1.75h-.05v-1.5h-3.91Z"
             />
           </svg>
-        </a>
+        </button>
+      </div>
+
+      <p v-if="shareHint" class="share-hint">{{ shareHint }}</p>
+
+      <div class="made-with-love">
+        <span>Made with love</span>
+        <span aria-hidden="true">•</span>
+        <a :href="creatorLinkedinUrl" target="_blank" rel="noreferrer"
+          >LinkedIn</a
+        >
+        <span aria-hidden="true">•</span>
+        <a :href="creatorGithubUrl" target="_blank" rel="noreferrer">GitHub</a>
       </div>
     </div>
   </div>
@@ -766,5 +819,36 @@ watch(
   transform: translateY(-1px);
   border-color: rgba(29, 185, 84, 0.5);
   background: rgba(29, 185, 84, 0.14);
+}
+
+.share-hint {
+  margin-top: 0.65rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  background: rgba(29, 185, 84, 0.14);
+  border: 1px solid rgba(29, 185, 84, 0.3);
+  font-size: 0.85rem;
+  color: #b2f0c8;
+}
+
+.made-with-love {
+  margin-top: 0.95rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  font-size: 0.8rem;
+  color: rgba(242, 255, 246, 0.78);
+}
+
+.made-with-love a {
+  color: #8ee7b3;
+  text-decoration: none;
+}
+
+.made-with-love a:hover {
+  text-decoration: underline;
 }
 </style>
